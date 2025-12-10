@@ -1,41 +1,45 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-</div>
+# HR Nexus
+Vite + React HR dashboard using Firebase Auth/Firestore for user and employment records.
 
-# Run and deploy your AI Studio app
+## Prerequisites
+- Node.js 18+
 
-This contains everything you need to run your app locally.
+## Install
+```bash
+npm install
+```
 
-View your app in AI Studio: https://ai.studio/apps/drive/1lHwCm6YNLQZ6T72SdxzSXMjS0nqvO07Q
+## Environment
+Choose the env file for the mode you run:
+- `.env.development` (used by `npm run dev`)
+- `.env.production` (used by `npm run build` / `npm run preview`)
+- `.env.local` (optional overrides on your machine)
 
-## Run Locally
+Required keys (set these in the chosen `.env.*`):
+```
+VITE_FIREBASE_API_KEY=...
+VITE_FIREBASE_AUTH_DOMAIN=...
+VITE_FIREBASE_PROJECT_ID=...
+VITE_FIREBASE_STORAGE_BUCKET=...
+VITE_FIREBASE_MESSAGING_SENDER_ID=...
+VITE_FIREBASE_APP_ID=...
+VITE_FIREBASE_MEASUREMENT_ID=...      # optional
+GEMINI_API_KEY=...                    # optional demo usage
+```
 
-**Prerequisites:**  Node.js
+## Run
+- Dev: `npm run dev`
+- Build: `npm run build`
+- Preview built assets: `npm run preview`
+- Alternate mode (e.g., staging): `npm run dev -- --mode staging`
 
-1. Install dependencies:
-   `npm install`
-2. Choose the environment you want to run against and copy the matching example file:
-   - Local dev (default): `.env.development.example` → `.env.development`
-   - Staging: `.env.staging.example` → `.env.staging`
-   - Production build: `.env.production.example` → `.env.production`
-3. Fill in the Firebase + Gemini variables in the file you just copied:
-   - `VITE_FIREBASE_API_KEY`
-   - `VITE_FIREBASE_AUTH_DOMAIN`
-   - `VITE_FIREBASE_PROJECT_ID`
-   - `VITE_FIREBASE_STORAGE_BUCKET`
-   - `VITE_FIREBASE_MESSAGING_SENDER_ID`
-   - `VITE_FIREBASE_APP_ID`
-   - `VITE_FIREBASE_MEASUREMENT_ID` (optional)
-   - `GEMINI_API_KEY`
-4. Run the app:
-   - Development (uses `.env.development`): `npm run dev`
-   - Staging mode (uses `.env.staging`): `npm run dev -- --mode staging`
-   - Production build (uses `.env.production`): `npm run build`
+## Key workflows
+- **Add Employee(s):** Opens the Add/Edit Employment Details modal. In create mode you can enter first/last/email plus employment details; saving creates the user document and an employmentDetails document, then refreshes the list.
+- **Add Team Member:** From User Management, creates a Firebase Auth user and a Firestore user record.
+- Lists refresh after saves so new entries appear immediately.
 
-Switching between a testing and live Firebase project is now just a matter of choosing which `.env.*` file to load.
-
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+## Tech stack
+- Vite + React + TypeScript
+- Firebase Auth + Firestore
+- Tailwind (via CDN in `index.html`)
+- Lucide icons, Recharts
