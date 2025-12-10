@@ -1,0 +1,15 @@
+/* Global focus styling: remove harsh outlines and use a subtle highlight instead */
+
+input:focus,
+select:focus,
+textarea:focus,
+button:focus {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.18);
+  border-color: #bfdbfe;
+}
+
+/* Remove default black outline for focus-visible states */
+*:focus-visible {
+  outline: none;
+}

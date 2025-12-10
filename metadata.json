@@ -1,0 +1,9 @@
+{
+  "name": "HR Nexus",
+  "description": "A comprehensive, aesthetic, and accessible HR management platform featuring user management, attendance tracking, and smart dashboard capabilities.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone",
+    "geolocation"
+  ]
+}
