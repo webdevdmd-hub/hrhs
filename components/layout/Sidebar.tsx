@@ -7,6 +7,7 @@ import {
   CalendarDays,
   CalendarClock,
   UserPlus,
+  BadgeCheck,
   Briefcase,
   FileText,
   TrendingUp,
@@ -53,6 +54,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen, userRole }) => {
   const navItems = [
     { icon: <LayoutDashboard size={20} />, label: 'Dashboard', path: '/' },
     { icon: <Users size={20} />, label: 'User Management', path: '/users' },
+    { icon: <BadgeCheck size={20} />, label: 'Employees', path: '/employees' },
     { icon: <Banknote size={20} />, label: 'Payroll', path: '/payroll' },
     { icon: <CalendarClock size={20} />, label: 'Attendance', path: '/attendance' },
     { icon: <CalendarDays size={20} />, label: 'Leave', path: '/leave' },

@@ -72,6 +72,44 @@ export interface EmploymentDetails {
   createdAt?: Date;
 }
 
+export type EmployeeStatus = 'active' | 'inactive';
+
+export interface Employee {
+  id: string;
+  employeeId: string;
+  firstName: string;
+  lastName: string;
+  preferredName?: string;
+  email: string;
+  personalEmail?: string;
+  workPhone?: string;
+  personalPhone?: string;
+  department?: string;
+  designation?: string;
+  employmentType?: string;
+  employmentStatus: EmployeeStatus;
+  dateOfJoining?: string;
+  dateOfExit?: string;
+  managerName?: string;
+  location?: string;
+  seatingLocation?: string;
+  tags?: string;
+  presentAddress?: string;
+  permanentAddress?: string;
+  dateOfBirth?: string;
+  age?: string;
+  gender?: string;
+  maritalStatus?: string;
+  about?: string;
+  expertise?: string;
+  onboardingStatus?: string;
+  currentExperience?: string;
+  totalExperience?: string;
+  notes?: string;
+  createdAt?: Date;
+  updatedAt?: Date;
+}
+
 export interface AttendanceRecord {
   id: string;
   userId: string;

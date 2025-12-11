@@ -1,3 +1,7 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
 /* Global focus styling: remove harsh outlines and use a subtle highlight instead */
 
 input:focus,

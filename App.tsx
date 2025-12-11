@@ -7,6 +7,7 @@ import FooterChat from './components/layout/FooterChat';
 import Dashboard from './components/base/Dashboard/Dashboard';
 import PayrollModule from './components/payroll/PayrollModule';
 import UserManagement from './components/admin/UserManagement/UserManagement';
+import EmployeesModule from './components/employee/EmployeesModule';
 import Login from './components/auth/Login';
 import { Role, User } from './shared/types';
 import { userService } from './shared/services/userService';
@@ -124,7 +125,11 @@ const AppLayout: React.FC = () => {
             />
             <Route 
               path="/employees"
-              element={<Navigate to="/" replace />}
+              element={
+                <RequireAuth user={currentUser} loading={authLoading}>
+                  <EmployeesModule />
+                </RequireAuth>
+              }
             />
             <Route
               path="/payroll"
