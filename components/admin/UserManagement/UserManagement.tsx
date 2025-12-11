@@ -1,11 +1,11 @@
 
-import React, { useState, useEffect, ChangeEvent, FormEvent } from 'react';
+import React, { useState, useEffect, ChangeEvent, FormEvent, useRef } from 'react';
 import { MOCK_USERS } from '../../../shared/services/mockData';
 import { Role, User } from '../../../shared/types';
 import Button from '../../shared/ui/Button';
 import { userService } from '../../../shared/services/userService';
 import { authService } from '../../../shared/services/authService';
-import { Search, Filter, Edit2, Trash2, Mail, MoreVertical, Shield, User as UserIcon, Loader2, AlertCircle } from 'lucide-react';
+import { Search, Filter, Edit2, Trash2, Mail, MoreVertical, Shield, User as UserIcon, Loader2, AlertCircle, Download, Upload, RefreshCcw } from 'lucide-react';
 
 interface UserFormData {
   firstName: string;
@@ -25,6 +25,13 @@ const UserManagement: React.FC = () => {
   const [isAddingUser, setIsAddingUser] = useState(false);
   const [showAddForm, setShowAddForm] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+  const [importing, setImporting] = useState(false);
+  const [importError, setImportError] = useState<string | null>(null);
+  const [importSuccess, setImportSuccess] = useState<string | null>(null);
+  const [actionNotice, setActionNotice] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const [editingUserId, setEditingUserId] = useState<string | null>(null);
+  const [resettingUserId, setResettingUserId] = useState<string | null>(null);
   const emptyForm: UserFormData = {
     firstName: '',
     lastName: '',
@@ -50,6 +57,11 @@ const UserManagement: React.FC = () => {
   };
 
   const resetForm = () => setFormData({ ...emptyForm });
+  const clearNotices = () => {
+    setImportError(null);
+    setImportSuccess(null);
+    setActionNotice(null);
+  };
 
   const fetchUsers = async () => {
     try {
@@ -78,9 +90,95 @@ const UserManagement: React.FC = () => {
     }
   };
 
+  const handleExportCsv = () => {
+    const headers = ['firstName','lastName','email','role','department','designation','status','archived'];
+    const rows = users.map(u => headers.map(h => {
+      const v = (u as any)[h];
+      return typeof v === 'string' ? `"${v.replace(/"/g, '""')}"` : v ?? '';
+    }).join(','));
+    const csv = [headers.join(','), ...rows].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'users-export.csv';
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleImportCsv = async (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    clearNotices();
+    setImporting(true);
+    try {
+      const text = await file.text();
+      const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+      if (lines.length < 2) throw new Error('File has no data rows.');
+      const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
+      const required = ['firstname','lastname','email','role','department','designation'];
+      const missing = required.filter(r => !headers.includes(r));
+      if (missing.length) throw new Error(`Missing columns: ${missing.join(', ')}`);
+
+      let success = 0;
+      let skipped = 0;
+      for (let i = 1; i < lines.length; i++) {
+        const values = lines[i].split(',').map(v => v.replace(/^"|"$/g, '').replace(/""/g, '"').trim());
+        if (values.length === 0 || values.every(v => !v)) { skipped++; continue; }
+        const record: Record<string, string> = {};
+        headers.forEach((h, idx) => record[h] = values[idx] ?? '');
+        const email = (record['email'] || '').toLowerCase();
+        if (!email) { skipped++; continue; }
+        const password = record['password'] || 'Temp123!';
+        const role = Object.values(Role).includes(record['role'] as Role) ? record['role'] as Role : Role.USER;
+        const status = record['status'] === 'inactive' ? 'inactive' : 'active';
+        try {
+          const { user: authUser } = await authService.createAuthUser(email, password);
+          const newUser: Omit<User, 'id'> = {
+            firstName: record['firstname'] || 'First',
+            lastName: record['lastname'] || 'Last',
+            email,
+            role,
+            department: record['department'] || '',
+            designation: record['designation'] || '',
+            status,
+            checkInStatus: 'out',
+            archived: status === 'inactive' || record['archived'] === 'true'
+          };
+          await userService.addUserWithId(authUser.uid, newUser);
+          success++;
+        } catch (err) {
+          console.error(`Row ${i + 1} import failed`, err);
+          skipped++;
+        }
+      }
+      await fetchUsers();
+      setImportSuccess(`Import complete: ${success} added, ${skipped} skipped/failed.`);
+    } catch (err: any) {
+      setImportError(err?.message || 'Import failed. Please check the file and try again.');
+    } finally {
+      setImporting(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
+  const handlePasswordReset = async (user: User) => {
+    clearNotices();
+    setResettingUserId(user.id);
+    try {
+      await authService.sendPasswordReset(user.email);
+      setActionNotice(`Password reset email sent to ${user.email}.`);
+    } catch (err: any) {
+      setActionNotice(err?.message || 'Could not send password reset.');
+    } finally {
+      setResettingUserId(null);
+    }
+  };
+
   const handleAddUser = async (event?: FormEvent) => {
     event?.preventDefault();
     setFormError(null);
+    clearNotices();
 
     const trimmedFirst = formData.firstName.trim();
     const trimmedLast = formData.lastName.trim();
@@ -88,7 +186,9 @@ const UserManagement: React.FC = () => {
     const trimmedDept = formData.department.trim();
     const trimmedDesignation = formData.designation.trim();
 
-    if (!trimmedFirst || !trimmedLast || !trimmedEmail || !formData.password || !trimmedDept || !trimmedDesignation) {
+    const missingCore = !trimmedFirst || !trimmedLast || !trimmedEmail || !trimmedDept || !trimmedDesignation;
+    const missingPassword = !editingUserId && !formData.password;
+    if (missingCore || missingPassword) {
       setFormError("Please fill in all required fields.");
       return;
     }
@@ -107,21 +207,32 @@ const UserManagement: React.FC = () => {
     };
 
     try {
-      const { user: authUser } = await authService.createAuthUser(trimmedEmail, formData.password);
-      await userService.addUserWithId(authUser.uid, newUser);
-      await fetchUsers(); // Refresh list from DB
-      resetForm();
-      setShowAddForm(false);
+      if (editingUserId) {
+        await userService.updateUser(editingUserId, { ...newUser, archived: false });
+        await fetchUsers();
+        setActionNotice(`Updated ${newUser.firstName} ${newUser.lastName}.`);
+        setEditingUserId(null);
+        setShowAddForm(false);
+        resetForm();
+      } else {
+        const { user: authUser } = await authService.createAuthUser(trimmedEmail, formData.password);
+        await userService.addUserWithId(authUser.uid, newUser);
+        await fetchUsers(); // Refresh list from DB
+        resetForm();
+        setShowAddForm(false);
+      }
     } catch (err: any) {
-      console.error("Failed to add user", err);
+      console.error("Failed to add/update user", err);
 
-      let msg = "Failed to add user.";
-      if (err.message === 'secondary-auth-unavailable') msg = "User creation is temporarily unavailable. Please refresh and try again.";
-      if (err.code === 'auth/email-already-in-use') msg = "Email is already registered in Firebase Auth.";
-      else if (err.code === 'auth/invalid-email') msg = "Email address is invalid.";
-      else if (err.code === 'auth/weak-password') msg = "Password should be at least 6 characters.";
-      else if (err.code === 'permission-denied') msg = "Permission denied. Check Firestore Security Rules.";
-      else if (err.message) msg = `${msg} ${err.message}`;
+      let msg = editingUserId ? "Failed to update user." : "Failed to add user.";
+      if (!editingUserId) {
+        if (err.message === 'secondary-auth-unavailable') msg = "User creation is temporarily unavailable. Please refresh and try again.";
+        if (err.code === 'auth/email-already-in-use') msg = "Email is already registered in Firebase Auth.";
+        else if (err.code === 'auth/invalid-email') msg = "Email address is invalid.";
+        else if (err.code === 'auth/weak-password') msg = "Password should be at least 6 characters.";
+      }
+      if (err.code === 'permission-denied') msg = "Permission denied. Check Firestore Security Rules.";
+      else if (err.message && !msg.includes(err.message)) msg = `${msg} ${err.message}`;
       setFormError(msg);
     } finally {
       setIsAddingUser(false);
@@ -134,6 +245,29 @@ const UserManagement: React.FC = () => {
     user.email.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
+  const startEditUser = (user: User) => {
+    clearNotices();
+    setFormData({
+      firstName: user.firstName,
+      lastName: user.lastName,
+      email: user.email,
+      password: '',
+      department: user.department,
+      designation: user.designation,
+      role: user.role
+    });
+    setEditingUserId(user.id);
+    setShowAddForm(true);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const cancelForm = () => {
+    resetForm();
+    setShowAddForm(false);
+    setEditingUserId(null);
+    clearNotices();
+  };
+
   return (
     <div className="p-4 lg:p-8">
       {/* Header */}
@@ -141,21 +275,63 @@ const UserManagement: React.FC = () => {
         <div>
           <h1 className="text-2xl font-bold text-gray-900 tracking-tight">User Management</h1>
           <p className="text-sm text-gray-500 mt-1">Manage employee access, roles, and profiles.</p>
-          {error && (
-            <div className="mt-3 inline-flex items-center gap-2 rounded-lg bg-orange-50 px-3 py-2 text-sm text-orange-700 border border-orange-200">
-              <AlertCircle size={16} />
-              <span>{error}</span>
+          {(error || importError || importSuccess || actionNotice) && (
+            <div className="mt-3 space-y-2">
+              {error && (
+                <div className="inline-flex items-center gap-2 rounded-lg bg-orange-50 px-3 py-2 text-sm text-orange-700 border border-orange-200">
+                  <AlertCircle size={16} />
+                  <span>{error}</span>
+                </div>
+              )}
+              {importError && (
+                <div className="inline-flex items-center gap-2 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 border border-red-200">
+                  <AlertCircle size={16} />
+                  <span>{importError}</span>
+                </div>
+              )}
+              {importSuccess && (
+                <div className="inline-flex items-center gap-2 rounded-lg bg-green-50 px-3 py-2 text-sm text-green-700 border border-green-200">
+                  <AlertCircle size={16} />
+                  <span>{importSuccess}</span>
+                </div>
+              )}
+              {actionNotice && (
+                <div className="inline-flex items-center gap-2 rounded-lg bg-blue-50 px-3 py-2 text-sm text-blue-700 border border-blue-200">
+                  <AlertCircle size={16} />
+                  <span>{actionNotice}</span>
+                </div>
+              )}
             </div>
           )}
         </div>
-        <Button 
-          size="md" 
-          className="w-full sm:w-auto shadow-lg shadow-blue-500/20 bg-blue-600 hover:bg-blue-700"
-          onClick={() => setShowAddForm(prev => !prev)}
-          type="button"
-        >
-          {showAddForm ? 'Close Add Form' : '+ Add Team Member'}
-        </Button>
+        <div className="flex flex-wrap gap-2 justify-end">
+          <input ref={fileInputRef} type="file" accept=".csv,text/csv" className="hidden" onChange={handleImportCsv} />
+          <Button 
+            variant="outline"
+            size="md"
+            className="bg-white text-gray-700 border-gray-200 hover:bg-gray-50"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={importing}
+          >
+            <Upload size={16} /> Import CSV
+          </Button>
+          <Button 
+            variant="outline" 
+            size="md" 
+            className="bg-white text-gray-700 border-gray-200 hover:bg-gray-50"
+            onClick={handleExportCsv}
+          >
+            <Download size={16} /> Export CSV
+          </Button>
+          <Button 
+            size="md" 
+            className="w-full sm:w-auto shadow-lg shadow-blue-500/20 bg-blue-600 hover:bg-blue-700"
+            onClick={() => setShowAddForm(prev => !prev)}
+            type="button"
+          >
+            {showAddForm ? (editingUserId ? 'Cancel Edit' : 'Close Add Form') : '+ Add Team Member'}
+          </Button>
+        </div>
       </div>
 
       {showAddForm && (
@@ -254,13 +430,13 @@ const UserManagement: React.FC = () => {
             </div>
             <div className="flex gap-3">
               <Button type="submit" className="bg-blue-600 hover:bg-blue-700 shadow-md shadow-blue-500/10" isLoading={isAddingUser}>
-                Create User
+                {editingUserId ? 'Update User' : 'Create User'}
               </Button>
               <Button 
                 type="button" 
                 variant="ghost" 
                 className="text-gray-600" 
-                onClick={() => { resetForm(); setShowAddForm(false); }}
+                onClick={cancelForm}
                 disabled={isAddingUser}
               >
                 Cancel
@@ -323,8 +499,8 @@ const UserManagement: React.FC = () => {
                       </p>
                     </div>
                   </div>
-                  <button className="text-gray-400 p-2 hover:bg-gray-100 rounded-lg transition-colors">
-                    <MoreVertical size={20} />
+                  <button className="text-gray-400 p-2 hover:bg-gray-100 rounded-lg transition-colors" onClick={() => handlePasswordReset(user)} title="Send password reset">
+                    <RefreshCcw size={18} />
                   </button>
                 </div>
                 
@@ -345,14 +521,17 @@ const UserManagement: React.FC = () => {
                 </div>
 
                 <div className="mt-5 pt-4 border-t border-gray-100 flex gap-3">
-                  <Button variant="ghost" size="sm" className="flex-1 border border-gray-200 text-gray-600 hover:text-blue-600 hover:border-blue-200">
-                      <Mail size={16} />
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    className="flex-1 border border-gray-200 text-gray-600 hover:text-blue-600 hover:border-blue-200 disabled:opacity-50" 
+                    onClick={() => handlePasswordReset(user)}
+                    disabled={resettingUserId === user.id}
+                  >
+                      {resettingUserId === user.id ? <Loader2 size={16} className="animate-spin" /> : <RefreshCcw size={16} />}
                   </Button>
-                  <Button variant="ghost" size="sm" className="flex-1 border border-gray-200 text-gray-600 hover:text-blue-600 hover:border-blue-200">
+                  <Button variant="ghost" size="sm" className="flex-1 border border-gray-200 text-gray-600 hover:text-blue-600 hover:border-blue-200" onClick={() => startEditUser(user)}>
                       <Edit2 size={16} />
-                  </Button>
-                  <Button variant="ghost" size="sm" className="flex-1 border border-gray-200 text-gray-600 hover:text-red-600 hover:border-red-200 hover:bg-red-50">
-                      <Trash2 size={16} />
                   </Button>
                 </div>
               </div>
@@ -426,14 +605,16 @@ const UserManagement: React.FC = () => {
                     </td>
                     <td className="px-6 py-4 text-right whitespace-nowrap">
                       <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button className="rounded-lg p-2 text-gray-400 hover:bg-blue-50 hover:text-blue-600 transition-colors">
-                          <Mail size={18} />
+                        <button 
+                          className="rounded-lg p-2 text-gray-400 hover:bg-blue-50 hover:text-blue-600 transition-colors disabled:opacity-50" 
+                          onClick={() => handlePasswordReset(user)} 
+                          title="Send password reset"
+                          disabled={resettingUserId === user.id}
+                        >
+                          {resettingUserId === user.id ? <Loader2 size={18} className="animate-spin" /> : <RefreshCcw size={18} />}
                         </button>
-                        <button className="rounded-lg p-2 text-gray-400 hover:bg-blue-50 hover:text-blue-600 transition-colors">
+                        <button className="rounded-lg p-2 text-gray-400 hover:bg-blue-50 hover:text-blue-600 transition-colors" onClick={() => startEditUser(user)} title="Edit user">
                           <Edit2 size={18} />
-                        </button>
-                        <button className="rounded-lg p-2 text-gray-400 hover:bg-red-50 hover:text-red-600 transition-colors">
-                          <Trash2 size={18} />
                         </button>
                       </div>
                     </td>

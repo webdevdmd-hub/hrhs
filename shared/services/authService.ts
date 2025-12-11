@@ -1,5 +1,5 @@
 import { initializeApp, getApps, FirebaseApp } from "firebase/app";
-import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, UserCredential, Auth } from "firebase/auth";
+import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, sendPasswordResetEmail, UserCredential, Auth } from "firebase/auth";
 import app from "./firebaseConfig";
 
 // Primary auth follows the logged-in user session
@@ -27,5 +27,8 @@ export const authService = {
   },
   async signOut(): Promise<void> {
     return signOut(primaryAuth);
+  },
+  async sendPasswordReset(email: string): Promise<void> {
+    return sendPasswordResetEmail(primaryAuth, email);
   }
 };

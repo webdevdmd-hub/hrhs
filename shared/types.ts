@@ -18,6 +18,7 @@ export interface User {
   status: 'active' | 'inactive';
   checkInStatus: 'in' | 'out';
   lastCheckIn?: Date;
+  archived?: boolean;
 }
 
 export interface EmploymentDetails {
