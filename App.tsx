@@ -5,6 +5,7 @@ import Sidebar from './components/layout/Sidebar';
 import Topbar from './components/layout/Topbar';
 import FooterChat from './components/layout/FooterChat';
 import Dashboard from './components/base/Dashboard/Dashboard';
+import PayrollModule from './components/payroll/PayrollModule';
 import UserManagement from './components/admin/UserManagement/UserManagement';
 import EmployeeManagement from './components/employee/EmployeeManagement';
 import Login from './components/auth/Login';
@@ -131,6 +132,16 @@ const AppLayout: React.FC = () => {
                   </RequireAdmin>
                 </RequireAuth>
               } 
+            />
+            <Route
+              path="/payroll"
+              element={
+                <RequireAuth user={currentUser} loading={authLoading}>
+                  <RequireAdmin user={currentUser as User}>
+                    <PayrollModule />
+                  </RequireAdmin>
+                </RequireAuth>
+              }
             />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>

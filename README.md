@@ -37,6 +37,7 @@ GEMINI_API_KEY=...                    # optional demo usage
 - **Add Employee(s):** Opens the Add/Edit Employment Details modal. In create mode you can enter first/last/email plus employment details; saving creates the user document and an employmentDetails document, then refreshes the list.
 - **Add Team Member:** From User Management, creates a Firebase Auth user and a Firestore user record.
 - Lists refresh after saves so new entries appear immediately.
+- **Payroll & Compensation:** Go to `/payroll` (also linked from the sidebar). Manage salary, benefits, taxes, and incentive data with editable cards for compensation, payment details, benefit enrollments, tax documents, and bonus tracking.
 
 ## Tech stack
 - Vite + React + TypeScript
