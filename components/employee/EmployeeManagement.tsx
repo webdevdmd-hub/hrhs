@@ -206,13 +206,11 @@ const EmployeeManagement: React.FC<EmployeeManagementProps> = ({ currentUser }) 
 
   const handleModalChange = (e: ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
-    setFormData(prev => prev ? ({ ...prev, [name]: value }) : prev);
-  };
+    setFormData(prev => prev ? ({ ...prev, [name]: value } as EmploymentFormState) : prev);
 
-  const handleNewUserFieldChange = (e: ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
-    const { name, value } = e.target;
-    setAddUserForm(prev => ({ ...prev, [name]: value }));
-    if (creatingNewUser) {
+    // Keep the user creation fields in sync so inputs stay controlled while typing.
+    if (creatingNewUser && ['firstName', 'lastName', 'email', 'department', 'designation'].includes(name)) {
+      setAddUserForm(prev => ({ ...prev, [name]: value }));
       setSelectedUser(prev => prev ? ({ ...prev, [name]: value }) : prev);
     }
   };
@@ -547,7 +545,6 @@ const EmployeeManagement: React.FC<EmployeeManagementProps> = ({ currentUser }) 
                         label="First Name"
                         name="firstName"
                         value={creatingNewUser ? addUserForm.firstName : selectedUser.firstName}
-                        onChange={handleNewUserFieldChange}
                         readOnly={!creatingNewUser}
                         placeholder="First name"
                       />
@@ -555,7 +552,6 @@ const EmployeeManagement: React.FC<EmployeeManagementProps> = ({ currentUser }) 
                         label="Email address"
                         name="email"
                         value={creatingNewUser ? addUserForm.email : selectedUser.email}
-                        onChange={handleNewUserFieldChange}
                         readOnly={!creatingNewUser}
                         placeholder="email@example.com"
                       />
@@ -563,7 +559,6 @@ const EmployeeManagement: React.FC<EmployeeManagementProps> = ({ currentUser }) 
                         label="Last Name"
                         name="lastName"
                         value={creatingNewUser ? addUserForm.lastName : selectedUser.lastName}
-                        onChange={handleNewUserFieldChange}
                         readOnly={!creatingNewUser}
                         placeholder="Last name"
                       />

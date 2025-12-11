@@ -20,7 +20,6 @@ import {
   Monitor,
   Receipt,
   AlertTriangle,
-  IdCard,
   MoreHorizontal,
   LogOut,
   X,
@@ -54,7 +53,6 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen, userRole }) => {
   const navItems = [
     { icon: <LayoutDashboard size={20} />, label: 'Dashboard', path: '/' },
     { icon: <Users size={20} />, label: 'User Management', path: '/users' },
-    { icon: <IdCard size={20} />, label: 'Employee Management', path: '/employees' },
     { icon: <Banknote size={20} />, label: 'Payroll', path: '/payroll' },
     { icon: <CalendarClock size={20} />, label: 'Attendance', path: '/attendance' },
     { icon: <CalendarDays size={20} />, label: 'Leave', path: '/leave' },
