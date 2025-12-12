@@ -5,9 +5,10 @@ import Sidebar from './components/layout/Sidebar';
 import Topbar from './components/layout/Topbar';
 import FooterChat from './components/layout/FooterChat';
 import Dashboard from './components/base/Dashboard/Dashboard';
-import PayrollModule from './components/payroll/PayrollModule';
+import PayrollModule from './components/base/payroll/PayrollModule';
 import UserManagement from './components/admin/UserManagement/UserManagement';
-import EmployeesModule from './components/employee/EmployeesModule';
+import EmployeesModule from './components/base/employee/EmployeesModule';
+import AttendanceModule from './components/attendance/AttendanceModule';
 import Login from './components/auth/Login';
 import { Role, User } from './shared/types';
 import { userService } from './shared/services/userService';
@@ -138,6 +139,14 @@ const AppLayout: React.FC = () => {
                   <RequireAdmin user={currentUser as User}>
                     <PayrollModule />
                   </RequireAdmin>
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="/attendance"
+              element={
+                <RequireAuth user={currentUser} loading={authLoading}>
+                  <AttendanceModule />
                 </RequireAuth>
               }
             />

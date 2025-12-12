@@ -74,11 +74,79 @@ export interface EmploymentDetails {
 
 export type EmployeeStatus = 'active' | 'inactive';
 
+export interface EmployeeBasicDetails {
+  firstName: string;
+  middleName?: string;
+  lastName: string;
+  firstNameArabic?: string;
+  employeeId: string;
+  employmentType?: string;
+  dateOfJoining?: string;
+  confirmationDate?: string;
+  workEmail?: string;
+  mobileNumber?: string;
+  gender?: string;
+  workLocation?: string;
+  designation?: string;
+  department?: string;
+  portalAccessEnabled?: boolean;
+  language?: string;
+  socialSecurityGcc?: boolean;
+  originCountry?: string;
+}
+
+export interface EmployeeSalaryDetails {
+  base?: number;
+  housingAllowance?: number;
+  costOfLivingAllowance?: number;
+  childrenAllowance?: number;
+  otherAllowance?: number;
+  fixedAllowance?: number;
+  frequency?: 'Monthly' | 'Bi-Weekly' | 'Weekly';
+}
+
+export interface EmployeePersonalDetails {
+  dateOfBirth?: string;
+  age?: string;
+  maritalStatus?: string;
+  about?: string;
+  expertise?: string;
+  fatherName?: string;
+  molId?: string;
+  personalEmail?: string;
+  presentAddressLine1?: string;
+  presentAddressLine2?: string;
+  presentCity?: string;
+  presentState?: string;
+  presentCountry?: string;
+  presentAddressArabicLine1?: string;
+  presentAddressArabicLine2?: string;
+  permanentAddressLine1?: string;
+  permanentAddressLine2?: string;
+  permanentCity?: string;
+  permanentState?: string;
+  permanentCountry?: string;
+}
+
+export interface EmployeePaymentInformation {
+  bankName?: string;
+  accountNumber?: string;
+  iban?: string;
+  method?: 'Bank Transfer' | 'Check' | 'Cash';
+  accountHolderName?: string;
+}
+
+export interface EmployeeDocumentItem {
+  name: string;
+  url?: string;
+  type?: string;
+}
+
 export interface Employee {
   id: string;
-  employeeId: string;
-  firstName: string;
-  lastName: string;
+  employeeId?: string;
+  firstName?: string;
+  lastName?: string;
   preferredName?: string;
   email: string;
   personalEmail?: string;
@@ -108,15 +176,30 @@ export interface Employee {
   notes?: string;
   createdAt?: Date;
   updatedAt?: Date;
+  basicDetails?: EmployeeBasicDetails;
+  salaryDetails?: EmployeeSalaryDetails;
+  personalDetails?: EmployeePersonalDetails;
+  paymentInformation?: EmployeePaymentInformation;
+  documents?: EmployeeDocumentItem[];
 }
 
 export interface AttendanceRecord {
   id: string;
   userId: string;
-  date: string;
-  checkIn: string; // ISO string
+  date: string; // YYYY-MM-DD
+  checkIn?: string; // ISO string
   checkOut?: string;
-  status: 'present' | 'absent' | 'half-day';
+  status: 'present' | 'absent' | 'half-day' | 'late' | 'early';
+  totalHours?: number;
+  overtimeHours?: number;
+  isLate?: boolean;
+  isEarlyDeparture?: boolean;
+  notes?: string;
+  approvedBy?: string;
+  approvalStatus?: 'pending' | 'approved' | 'rejected';
+  updatedBy?: string;
+  updatedAt?: Date;
+  createdAt?: Date;
 }
 
 export interface NavItem {
