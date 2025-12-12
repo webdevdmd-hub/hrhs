@@ -2,6 +2,7 @@ import {
   addDoc,
   collection,
   doc,
+  deleteDoc,
   getDocs,
   orderBy,
   query,
@@ -58,5 +59,10 @@ export const employeeService = {
       dateOfExit: dateOfExit || new Date().toISOString().slice(0, 10),
       updatedAt: now
     });
+  },
+
+  async deleteEmployee(id: string): Promise<void> {
+    const ref = doc(db, COLLECTION, id);
+    await deleteDoc(ref);
   }
 };

@@ -8,7 +8,10 @@ import {
   Plus,
   Search,
   UserMinus,
-  Users
+  Users,
+  Trash,
+  AlertTriangle,
+  Loader2
 } from 'lucide-react';
 import Button from '../shared/ui/Button';
 import { Employee, EmployeeStatus } from '../../shared/types';
@@ -115,6 +118,8 @@ const EmployeesModule: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [showSnapshot, setShowSnapshot] = useState(false);
   const [statusChangingId, setStatusChangingId] = useState<string | null>(null);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   useEffect(() => {
     const load = async () => {
@@ -162,6 +167,7 @@ const EmployeesModule: React.FC = () => {
   const handleSnapshotOpen = (emp: Employee) => {
     setSelectedEmployee(emp);
     setShowSnapshot(true);
+    setShowDeleteConfirm(false);
   };
 
   const generateEmployeeId = () => {
@@ -177,6 +183,7 @@ const EmployeesModule: React.FC = () => {
   const openModal = (emp?: Employee) => {
     setError(null);
     setShowSnapshot(false);
+    setShowDeleteConfirm(false);
     if (emp) {
       const { id: _, createdAt: __, updatedAt: ___, ...rest } = emp;
       setEditingId(emp.id);
@@ -261,6 +268,24 @@ const EmployeesModule: React.FC = () => {
       setError('Unable to update employee status.');
     } finally {
       setStatusChangingId(null);
+    }
+  };
+
+  const handleDeleteEmployee = async () => {
+    if (!selectedEmployee) return;
+    setIsDeleting(true);
+    setError(null);
+    try {
+      await employeeService.deleteEmployee(selectedEmployee.id);
+      setEmployees(prev => prev.filter(emp => emp.id !== selectedEmployee.id));
+      setShowDeleteConfirm(false);
+      setShowSnapshot(false);
+      setSelectedEmployee(null);
+    } catch (err) {
+      console.error('Failed to delete employee', err);
+      setError('Unable to delete employee. Please try again.');
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -431,8 +456,15 @@ const EmployeesModule: React.FC = () => {
                   {selectedEmployee.employmentStatus === 'active' ? 'Active' : 'Inactive'}
                 </span>
                 <button
+                  className="inline-flex items-center gap-1 rounded-full border border-red-200 px-3 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-50"
+                  onClick={() => setShowDeleteConfirm(true)}
+                  aria-label="Delete employee"
+                >
+                  <Trash size={14} /> Delete
+                </button>
+                <button
                   className="rounded-full p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100"
-                  onClick={() => setShowSnapshot(false)}
+                  onClick={() => { setShowSnapshot(false); setShowDeleteConfirm(false); }}
                   aria-label="Close snapshot"
                 >
                   <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
@@ -490,6 +522,43 @@ const EmployeesModule: React.FC = () => {
                   <InfoRow label="Ask me about / Expertise" value={selectedEmployee.expertise || '-'} />
                 </div>
               </Section>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showDeleteConfirm && selectedEmployee && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/70 backdrop-blur-sm px-4">
+          <div className="w-full max-w-lg rounded-2xl bg-white shadow-2xl ring-1 ring-slate-200">
+            <div className="flex items-start gap-3 px-6 py-5">
+              <div className="rounded-full bg-red-50 p-2 text-red-600">
+                <AlertTriangle size={18} />
+              </div>
+              <div className="space-y-2">
+                <h4 className="text-lg font-semibold text-slate-900">Delete employee record?</h4>
+                <p className="text-sm text-slate-600">
+                  This will permanently remove {selectedEmployee.firstName} {selectedEmployee.lastName} from the dedicated <span className="font-semibold">employees</span> database collection. This action cannot be undone.
+                </p>
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 border-t border-slate-200 px-6 py-4">
+              <button
+                type="button"
+                className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                onClick={() => setShowDeleteConfirm(false)}
+                disabled={isDeleting}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="inline-flex items-center gap-2 rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 disabled:opacity-60"
+                onClick={handleDeleteEmployee}
+                disabled={isDeleting}
+              >
+                {isDeleting && <Loader2 size={16} className="animate-spin" />}
+                Delete
+              </button>
             </div>
           </div>
         </div>
