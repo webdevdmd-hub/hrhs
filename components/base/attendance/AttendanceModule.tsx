@@ -1,8 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Calendar, Clock, Download, Filter, Search, CheckCircle2, XCircle, ArrowRightLeft, Loader2 } from 'lucide-react';
-import { AttendanceRecord, Employee } from '../../shared/types';
-import { attendanceService } from '../../shared/services/attendanceService';
-import { employeeService } from '../../shared/services/employeeService';
+import { AttendanceRecord, Employee } from '../../../shared/types';
+import { attendanceService } from '../../../shared/services/attendanceService';
+import { employeeService } from '../../../shared/services/employeeService';
 
 const todayISO = new Date().toISOString().slice(0, 10);
 

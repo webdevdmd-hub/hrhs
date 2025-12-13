@@ -8,7 +8,7 @@ import Dashboard from './components/base/Dashboard/Dashboard';
 import PayrollModule from './components/base/payroll/PayrollModule';
 import UserManagement from './components/admin/UserManagement/UserManagement';
 import EmployeesModule from './components/base/employee/EmployeesModule';
-import AttendanceModule from './components/attendance/AttendanceModule';
+import AttendanceModule from './components/base/attendance/AttendanceModule';
 import Login from './components/auth/Login';
 import { Role, User } from './shared/types';
 import { userService } from './shared/services/userService';
