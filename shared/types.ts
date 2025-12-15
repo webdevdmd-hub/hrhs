@@ -3,7 +3,11 @@ import React from 'react';
 export enum Role {
   ADMIN = 'ADMIN',
   USER = 'USER',
-  MANAGER = 'MANAGER'
+  MANAGER = 'MANAGER',
+  HR = 'HR',
+  RECRUITER = 'RECRUITER',
+  HIRING_MANAGER = 'HIRING_MANAGER',
+  INTERVIEWER = 'INTERVIEWER'
 }
 
 export interface User {
@@ -142,6 +146,54 @@ export interface EmployeeDocumentItem {
   type?: string;
 }
 
+export type ApprovalStatus = 'pending' | 'approved' | 'rejected' | 'changes_requested';
+
+export interface RequisitionApprovalStep {
+  role: string;
+  userId?: string;
+  name?: string;
+  status: ApprovalStatus;
+  comment?: string;
+  updatedAt?: Date;
+}
+
+export interface RequisitionAuditEntry {
+  action: string;
+  by: string;
+  byName?: string;
+  at: Date;
+  details?: string;
+}
+
+export interface SalaryBand {
+  min: number;
+  max: number;
+  currency: string;
+}
+
+export interface JobRequisition {
+  id: string;
+  title: string;
+  department: string;
+  location: string;
+  employmentType: string;
+  grade?: string;
+  openings: number;
+  salaryRange?: SalaryBand;
+  targetStartDate?: string;
+  costCenter?: string;
+  hiringManager?: string;
+  recruiters?: string[];
+  justification?: string;
+  status: 'draft' | 'pending' | 'approved' | 'changes_requested' | 'rejected' | 'closed';
+  approvals: RequisitionApprovalStep[];
+  timeline: RequisitionAuditEntry[];
+  createdBy: string;
+  createdByName?: string;
+  createdAt?: Date;
+  updatedAt?: Date;
+}
+
 export interface Employee {
   id: string;
   employeeId?: string;
@@ -200,6 +252,155 @@ export interface AttendanceRecord {
   updatedBy?: string;
   updatedAt?: Date;
   createdAt?: Date;
+}
+
+export interface JobApplication {
+  id: string;
+  name: string;
+  email: string;
+  phone?: string;
+  cover?: string;
+  consentAccepted: boolean;
+  consentVersion: string;
+  source?: string;
+  files?: string[]; // file names or storage paths
+  postingId?: string;
+  postingTitle?: string;
+  stage?: 'Applied' | 'Screening' | 'Interview' | 'Offer' | 'Hired' | 'Rejected' | 'On hold';
+  rating?: number;
+  tags?: string[];
+  notes?: ApplicationNote[];
+  submittedAt?: Date;
+}
+
+export interface ApplicationNote {
+  id: string;
+  text: string;
+  author: string;
+  authorName?: string;
+  createdAt: Date;
+}
+
+export interface JobPosting {
+  id: string;
+  title: string;
+  department: string;
+  location: string;
+  employmentType: string;
+  description: string;
+  internalOnly: boolean;
+  consentVersion: string;
+  status: 'draft' | 'published';
+  requisitionId?: string;
+  requisitionTitle?: string;
+  createdAt?: Date;
+  updatedAt?: Date;
+}
+
+export type InterviewFormat = 'In-person' | 'Video' | 'Phone';
+export type InterviewStatus = 'Scheduled' | 'Completed' | 'Cancelled' | 'No-show';
+
+export interface InterviewFeedback {
+  id: string;
+  author: string;
+  authorName?: string;
+  rating?: number;
+  notes: string;
+  submittedAt: Date;
+}
+
+export interface Interview {
+  id: string;
+  candidate: string;
+  candidateEmail?: string;
+  candidatePhone?: string;
+  jobTitle: string;
+  postingId?: string;
+  applicationId?: string;
+  stage: string;
+  date: string; // YYYY-MM-DD
+  time: string; // HH:mm
+  durationMinutes: number;
+  format: InterviewFormat;
+  interviewers: string[];
+  location?: string;
+  videoLink?: string;
+  notes?: string;
+  status: InterviewStatus;
+  feedback?: InterviewFeedback[];
+  createdAt?: Date;
+  updatedAt?: Date;
+}
+
+export type OfferStatus = 'Drafted' | 'Approved' | 'Sent' | 'Viewed' | 'Accepted' | 'Rejected' | 'Expired' | 'Withdrawn';
+
+export interface Offer {
+  id: string;
+  candidate: string;
+  candidateEmail?: string;
+  jobTitle: string;
+  postingId?: string;
+  applicationId?: string;
+  requisitionId?: string;
+  salary: number;
+  currency: string;
+  startDate?: string;
+  status: OfferStatus;
+  version: number;
+  approvals?: RequisitionApprovalStep[];
+  notes?: string;
+  createdAt?: Date;
+  updatedAt?: Date;
+}
+
+export type BackgroundStatus = 'Initiated' | 'In progress' | 'Completed' | 'Flagged' | 'Cleared' | 'Rejected';
+
+export interface BackgroundCheck {
+  id: string;
+  candidate: string;
+  candidateEmail?: string;
+  jobTitle?: string;
+  postingId?: string;
+  applicationId?: string;
+  offerId?: string;
+  packageType?: string;
+  vendor?: string;
+  consentVersion?: string;
+  consentAt?: Date;
+  requestedBy?: string;
+  startedAt?: Date;
+  completedAt?: Date;
+  status: BackgroundStatus;
+  resultSummary?: string;
+  attachments?: string[];
+  audit?: RequisitionAuditEntry[];
+  createdAt?: Date;
+  updatedAt?: Date;
+}
+
+export type OnboardingStatus = 'pending' | 'in-progress' | 'completed';
+
+export interface OnboardingTask {
+  id: string;
+  title: string;
+  status: 'todo' | 'done';
+  assignee?: string;
+}
+
+export interface OnboardingRecord {
+  id: string;
+  candidate: string;
+  candidateEmail?: string;
+  jobTitle?: string;
+  postingId?: string;
+  requisitionId?: string;
+  applicationId?: string;
+  offerId?: string;
+  backgroundCheckId?: string;
+  status: OnboardingStatus;
+  tasks: OnboardingTask[];
+  createdAt?: Date;
+  updatedAt?: Date;
 }
 
 export interface NavItem {

@@ -21,6 +21,9 @@ import {
   Monitor,
   Receipt,
   AlertTriangle,
+  Tag,
+  Calendar,
+  FileSignature,
   MoreHorizontal,
   LogOut,
   X,
@@ -53,13 +56,19 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen, userRole }) => {
   // Comprehensive HR Module List
   const navItems = [
     { icon: <LayoutDashboard size={20} />, label: 'Dashboard', path: '/' },
-    { icon: <Users size={20} />, label: 'User Management', path: '/users' },
+    { icon: <Users size={20} />, label: 'User Management', path: '/users', roles: [Role.ADMIN] },
     { icon: <BadgeCheck size={20} />, label: 'Employees', path: '/employees' },
-    { icon: <Banknote size={20} />, label: 'Payroll', path: '/payroll' },
+    { icon: <Banknote size={20} />, label: 'Payroll', path: '/payroll', roles: [Role.ADMIN] },
     { icon: <CalendarClock size={20} />, label: 'Attendance', path: '/attendance' },
     { icon: <CalendarDays size={20} />, label: 'Leave', path: '/leave' },
-    { icon: <UserPlus size={20} />, label: 'Recruitment', path: '/recruitment' },
-    { icon: <Briefcase size={20} />, label: 'Onboarding', path: '/onboarding' },
+    { icon: <UserPlus size={20} />, label: 'Requisitions', path: '/recruitment', roles: [Role.ADMIN, Role.HR, Role.RECRUITER, Role.HIRING_MANAGER] },
+    { icon: <Briefcase size={20} />, label: 'Job Postings', path: '/recruitment/postings', roles: [Role.ADMIN, Role.HR, Role.RECRUITER] },
+    { icon: <Tag size={20} />, label: 'ATS', path: '/recruitment/ats', roles: [Role.ADMIN, Role.HR, Role.RECRUITER] },
+    { icon: <Calendar size={20} />, label: 'Interviews', path: '/recruitment/interviews', roles: [Role.ADMIN, Role.HR, Role.RECRUITER, Role.INTERVIEWER, Role.HIRING_MANAGER] },
+    { icon: <FileSignature size={20} />, label: 'Offers', path: '/recruitment/offers', roles: [Role.ADMIN, Role.HR, Role.RECRUITER] },
+    { icon: <ShieldCheck size={20} />, label: 'Background', path: '/recruitment/background', roles: [Role.ADMIN, Role.HR] },
+    { icon: <PieChart size={20} />, label: 'Recruitment Analytics', path: '/recruitment/analytics', roles: [Role.ADMIN, Role.HR, Role.RECRUITER, Role.HIRING_MANAGER] },
+    { icon: <Briefcase size={20} />, label: 'Onboarding', path: '/onboarding', roles: [Role.ADMIN, Role.HR, Role.RECRUITER] },
     { icon: <FileText size={20} />, label: 'Documents', path: '/documents' },
     { icon: <TrendingUp size={20} />, label: 'Performance', path: '/performance' },
     { icon: <UserCheck size={20} />, label: 'My Space (ESS)', path: '/ess' },
@@ -127,7 +136,9 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen, userRole }) => {
           
           {/* Scrollable Module List */}
           <div className="flex-1 space-y-1 overflow-y-auto custom-scrollbar pr-1 -mr-1">
-            {navItems.map((item) => (
+            {navItems
+              .filter(item => !item.roles || item.roles.includes(userRole))
+              .map((item) => (
               <NavLink
                 key={item.path}
                 to={item.path}

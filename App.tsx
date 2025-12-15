@@ -8,9 +8,16 @@ import Dashboard from './components/base/Dashboard/Dashboard';
 import PayrollModule from './components/base/payroll/PayrollModule';
 import UserManagement from './components/admin/UserManagement/UserManagement';
 import EmployeesModule from './components/base/employee/EmployeesModule';
-import AttendanceModule from './components/base/attendance/AttendanceModule';
+import JobRequisitionModule from './components/recruitment/JobRequisitionModule';
+import JobPostingModule from './components/recruitment/JobPostingModule';
+import ATSModule from './components/recruitment/ATSModule';
+import InterviewsModule from './components/recruitment/InterviewsModule';
+import OffersModule from './components/recruitment/OffersModule';
+import BackgroundChecksModule from './components/recruitment/BackgroundChecksModule';
+import RecruitmentAnalytics from './components/recruitment/RecruitmentAnalytics';
 import Login from './components/auth/Login';
 import { Role, User } from './shared/types';
+import { hasAccess } from './shared/permissions';
 import { userService } from './shared/services/userService';
 import app from './shared/services/firebaseConfig';
 import { Loader2 } from 'lucide-react';
@@ -33,8 +40,8 @@ const RequireAuth: React.FC<GuardProps> = ({ user, loading, children }) => {
   return children;
 };
 
-const RequireAdmin: React.FC<{ user: User; children: React.ReactElement; }> = ({ user, children }) => {
-  if (user.role !== Role.ADMIN) return <Navigate to="/" replace />;
+const RequireRoles: React.FC<{ user: User; module: import('./shared/permissions').Module; action?: 'view' | 'edit' | 'create'; children: React.ReactElement; }> = ({ user, module, action = 'view', children }) => {
+  if (!hasAccess(user.role, module, action)) return <Navigate to="/" replace />;
   return children;
 };
 
@@ -118,9 +125,9 @@ const AppLayout: React.FC = () => {
               path="/users" 
               element={
                 <RequireAuth user={currentUser} loading={authLoading}>
-                  <RequireAdmin user={currentUser as User}>
+                  <RequireRoles user={currentUser as User} module="users">
                     <UserManagement />
-                  </RequireAdmin>
+                  </RequireRoles>
                 </RequireAuth>
               } 
             />
@@ -132,21 +139,83 @@ const AppLayout: React.FC = () => {
                 </RequireAuth>
               }
             />
-            <Route
+            <Route 
               path="/payroll"
               element={
                 <RequireAuth user={currentUser} loading={authLoading}>
-                  <RequireAdmin user={currentUser as User}>
+                  <RequireRoles user={currentUser as User} module="payroll">
                     <PayrollModule />
-                  </RequireAdmin>
+                  </RequireRoles>
                 </RequireAuth>
               }
             />
             <Route
-              path="/attendance"
+              path="/recruitment"
               element={
                 <RequireAuth user={currentUser} loading={authLoading}>
-                  <AttendanceModule />
+                  <RequireRoles user={currentUser as User} module="requisitions">
+                    <JobRequisitionModule currentUser={currentUser as User} />
+                  </RequireRoles>
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="/recruitment/postings"
+              element={
+                <RequireAuth user={currentUser} loading={authLoading}>
+                  <RequireRoles user={currentUser as User} module="postings">
+                    <JobPostingModule />
+                  </RequireRoles>
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="/recruitment/ats"
+              element={
+                <RequireAuth user={currentUser} loading={authLoading}>
+                  <RequireRoles user={currentUser as User} module="ats">
+                    <ATSModule />
+                  </RequireRoles>
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="/recruitment/interviews"
+              element={
+                <RequireAuth user={currentUser} loading={authLoading}>
+                  <RequireRoles user={currentUser as User} module="interviews">
+                    <InterviewsModule />
+                  </RequireRoles>
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="/recruitment/offers"
+              element={
+                <RequireAuth user={currentUser} loading={authLoading}>
+                  <RequireRoles user={currentUser as User} module="offers">
+                    <OffersModule />
+                  </RequireRoles>
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="/recruitment/background"
+              element={
+                <RequireAuth user={currentUser} loading={authLoading}>
+                  <RequireRoles user={currentUser as User} module="background">
+                    <BackgroundChecksModule />
+                  </RequireRoles>
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="/recruitment/analytics"
+              element={
+                <RequireAuth user={currentUser} loading={authLoading}>
+                  <RequireRoles user={currentUser as User} module="analytics">
+                    <RecruitmentAnalytics />
+                  </RequireRoles>
                 </RequireAuth>
               }
             />
