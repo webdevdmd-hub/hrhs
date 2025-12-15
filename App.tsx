@@ -17,7 +17,7 @@ import BackgroundChecksModule from './components/recruitment/BackgroundChecksMod
 import RecruitmentAnalytics from './components/recruitment/RecruitmentAnalytics';
 import Login from './components/auth/Login';
 import { Role, User } from './shared/types';
-import { hasAccess } from './shared/permissions';
+import { hasAccess, Module, PermissionConfig } from './shared/permissions';
 import { userService } from './shared/services/userService';
 import app from './shared/services/firebaseConfig';
 import { Loader2 } from 'lucide-react';
@@ -40,8 +40,8 @@ const RequireAuth: React.FC<GuardProps> = ({ user, loading, children }) => {
   return children;
 };
 
-const RequireRoles: React.FC<{ user: User; module: import('./shared/permissions').Module; action?: 'view' | 'edit' | 'create'; children: React.ReactElement; }> = ({ user, module, action = 'view', children }) => {
-  if (!hasAccess(user.role, module, action)) return <Navigate to="/" replace />;
+const RequireRoles: React.FC<{ user: User; module: Module; action?: 'view' | 'edit' | 'create'; children: React.ReactElement; }> = ({ user, module, action = 'view', children }) => {
+  if (!hasAccess(user.role, module, action as keyof PermissionConfig)) return <Navigate to="/" replace />;
   return children;
 };
 

@@ -12,7 +12,7 @@ export type Module =
   | "payroll"
   | "users";
 
-type PermissionConfig = {
+export type PermissionConfig = {
   view: Role[];
   edit?: Role[];
   create?: Role[];
