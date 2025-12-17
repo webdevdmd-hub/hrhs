@@ -582,7 +582,7 @@ const EmployeesModule: React.FC = () => {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
           <div className="flex items-center justify-between text-sm text-slate-500">
             <span className="font-semibold text-slate-700 flex items-center gap-2"><BadgeCheck size={16} className="text-emerald-500" /> Active</span>
@@ -592,17 +592,17 @@ const EmployeesModule: React.FC = () => {
         </div>
         <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
           <div className="flex items-center justify-between text-sm text-slate-500">
-            <span className="font-semibold text-slate-700 flex items-center gap-2"><UserMinus size={16} className="text-amber-500" /> Inactive</span>
-            <span className="rounded-full bg-amber-50 px-3 py-1 text-amber-700 font-semibold">{inactiveCount}</span>
-          </div>
-          <p className="text-xs text-slate-500 mt-2">Exited / offboarded employees</p>
-        </div>
-        <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-          <div className="flex items-center justify-between text-sm text-slate-500">
             <span className="font-semibold text-slate-700 flex items-center gap-2"><BadgeCheck size={16} className="text-blue-500" /> Onboarding</span>
             <span className="rounded-full bg-blue-50 px-3 py-1 text-blue-700 font-semibold">{pendingCount}</span>
           </div>
           <p className="text-xs text-slate-500 mt-2">Incomplete profiles awaiting completion</p>
+        </div>
+        <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+          <div className="flex items-center justify-between text-sm text-slate-500">
+            <span className="font-semibold text-slate-700 flex items-center gap-2"><UserMinus size={16} className="text-amber-500" /> Inactive</span>
+            <span className="rounded-full bg-amber-50 px-3 py-1 text-amber-700 font-semibold">{inactiveCount}</span>
+          </div>
+          <p className="text-xs text-slate-500 mt-2">Exited / offboarded employees</p>
         </div>
       </div>
 
