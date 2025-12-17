@@ -16,6 +16,7 @@ import OffersModule from './components/recruitment/OffersModule';
 import BackgroundChecksModule from './components/recruitment/BackgroundChecksModule';
 import RecruitmentAnalytics from './components/recruitment/RecruitmentAnalytics';
 import Login from './components/auth/Login';
+import CompanyManagement from './components/admin/CompanyManagement/CompanyManagement';
 import { Role, User } from './shared/types';
 import { hasAccess, Module, PermissionConfig } from './shared/permissions';
 import { userService } from './shared/services/userService';
@@ -130,6 +131,16 @@ const AppLayout: React.FC = () => {
                   </RequireRoles>
                 </RequireAuth>
               } 
+            />
+            <Route
+              path="/companies"
+              element={
+                <RequireAuth user={currentUser} loading={authLoading}>
+                  <RequireRoles user={currentUser as User} module="companies">
+                    <CompanyManagement />
+                  </RequireRoles>
+                </RequireAuth>
+              }
             />
             <Route 
               path="/employees"

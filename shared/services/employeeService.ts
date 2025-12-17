@@ -21,6 +21,22 @@ const toEmployee = (id: string, data: any): Employee => ({
   updatedAt: data.updatedAt instanceof Timestamp ? data.updatedAt.toDate() : data.updatedAt
 });
 
+// Remove undefined values recursively to satisfy Firestore
+const stripUndefined = (value: any): any => {
+  if (Array.isArray(value)) {
+    return value.map(stripUndefined);
+  }
+  if (value && typeof value === "object") {
+    const cleaned: Record<string, any> = {};
+    Object.entries(value).forEach(([key, val]) => {
+      if (val === undefined) return;
+      cleaned[key] = stripUndefined(val);
+    });
+    return cleaned;
+  }
+  return value;
+};
+
 export const employeeService = {
   async getAllEmployees(): Promise<Employee[]> {
     const employeesQuery = query(collection(db, COLLECTION), orderBy("firstName"));
@@ -30,11 +46,14 @@ export const employeeService = {
 
   async addEmployee(payload: Omit<Employee, "id" | "createdAt" | "updatedAt">): Promise<Employee> {
     const now = Timestamp.now();
-    const docRef = await addDoc(collection(db, COLLECTION), {
-      ...payload,
-      createdAt: now,
-      updatedAt: now
-    });
+    const docRef = await addDoc(
+      collection(db, COLLECTION),
+      stripUndefined({
+        ...payload,
+        createdAt: now,
+        updatedAt: now
+      })
+    );
 
     return {
       id: docRef.id,
@@ -47,7 +66,8 @@ export const employeeService = {
   async updateEmployee(id: string, data: Partial<Employee>): Promise<void> {
     const ref = doc(db, COLLECTION, id);
     const now = Timestamp.now();
-    await updateDoc(ref, { ...data, updatedAt: now });
+    const payload = stripUndefined({ ...data, updatedAt: now });
+    await updateDoc(ref, payload);
   },
 
   async markInactive(id: string, dateOfExit?: string): Promise<void> {

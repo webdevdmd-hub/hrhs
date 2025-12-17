@@ -1,13 +1,54 @@
 import React from 'react';
 
 export enum Role {
+  CEO = 'CEO',
   ADMIN = 'ADMIN',
+  EMPLOYEE = 'EMPLOYEE',
   USER = 'USER',
   MANAGER = 'MANAGER',
   HR = 'HR',
   RECRUITER = 'RECRUITER',
   HIRING_MANAGER = 'HIRING_MANAGER',
   INTERVIEWER = 'INTERVIEWER'
+}
+
+export interface CompanyAddress {
+  type?: string;
+  line1: string;
+  line2?: string;
+  city?: string;
+  state?: string;
+  postalCode?: string;
+  country?: string;
+}
+
+export interface CompanyRole {
+  id: string;
+  name: string;
+  description?: string;
+  systemRole?: Role;
+  permissions?: string[];
+  createdAt?: Date;
+  createdBy?: string;
+}
+
+export interface Company {
+  id: string;
+  name: string;
+  legalName?: string;
+  registrationNumber?: string;
+  taxId?: string;
+  industry?: string;
+  status: 'active' | 'inactive';
+  primaryContact?: {
+    name?: string;
+    email?: string;
+    phone?: string;
+  };
+  addresses?: CompanyAddress[];
+  roles?: CompanyRole[];
+  createdAt?: Date;
+  updatedAt?: Date;
 }
 
 export interface User {
@@ -18,6 +59,12 @@ export interface User {
   role: Role;
   designation: string;
   department: string;
+  companyId?: string;
+  companyName?: string;
+  companyRoleId?: string;
+  companyRoleName?: string;
+  companyRoleSystemRole?: Role;
+  employeeRecordId?: string;
   avatarUrl?: string;
   status: 'active' | 'inactive';
   checkInStatus: 'in' | 'out';
@@ -76,7 +123,7 @@ export interface EmploymentDetails {
   createdAt?: Date;
 }
 
-export type EmployeeStatus = 'active' | 'inactive';
+export type EmployeeStatus = 'active' | 'inactive' | 'pending';
 
 export interface EmployeeBasicDetails {
   firstName: string;
@@ -196,6 +243,11 @@ export interface JobRequisition {
 
 export interface Employee {
   id: string;
+  userId?: string;
+  companyId?: string;
+  companyName?: string;
+  companyRoleId?: string;
+  companyRoleName?: string;
   employeeId?: string;
   firstName?: string;
   lastName?: string;

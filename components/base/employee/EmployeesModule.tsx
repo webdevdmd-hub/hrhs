@@ -14,8 +14,9 @@ import {
   Check
 } from 'lucide-react';
 import Button from '../../shared/ui/Button';
-import { Employee, EmployeeStatus, EmployeeBasicDetails, EmployeeSalaryDetails, EmployeePersonalDetails, EmployeePaymentInformation, EmployeeDocumentItem } from '../../../shared/types';
+import { Employee, EmployeeStatus, EmployeeBasicDetails, EmployeeSalaryDetails, EmployeePersonalDetails, EmployeePaymentInformation, EmployeeDocumentItem, Role, User } from '../../../shared/types';
 import { employeeService } from '../../../shared/services/employeeService';
+import { userService } from '../../../shared/services/userService';
 
 type FormState = {
   basicDetails: EmployeeBasicDetails;
@@ -25,6 +26,11 @@ type FormState = {
   documents: EmployeeDocumentItem[];
   employmentStatus: EmployeeStatus;
   onboardingStatus?: string;
+  userId?: string;
+  companyId?: string;
+  companyName?: string;
+  companyRoleId?: string;
+  companyRoleName?: string;
 };
 
 const defaultForm: FormState = {
@@ -60,14 +66,20 @@ const defaultForm: FormState = {
   personalDetails: {},
   paymentInformation: {},
   documents: [],
-  employmentStatus: 'active',
-  onboardingStatus: 'Active'
+  employmentStatus: 'pending',
+  onboardingStatus: 'Incomplete Profile',
+  userId: undefined,
+  companyId: undefined,
+  companyName: undefined,
+  companyRoleId: undefined,
+  companyRoleName: undefined
 };
 
-const statusBadge = (status: EmployeeStatus) =>
-  status === 'active'
-    ? 'bg-emerald-50 text-emerald-700 border border-emerald-100'
-    : 'bg-amber-50 text-amber-700 border border-amber-100';
+const statusBadge = (status: EmployeeStatus) => {
+  if (status === 'active') return 'bg-emerald-50 text-emerald-700 border border-emerald-100';
+  if (status === 'inactive') return 'bg-amber-50 text-amber-700 border border-amber-100';
+  return 'bg-blue-50 text-blue-700 border border-blue-100';
+};
 
 const wizardSteps = [
   'Basic Details',
@@ -96,6 +108,7 @@ const EmployeesModule: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState<'all' | EmployeeStatus>('all');
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
+  const [hydratingEmployees, setHydratingEmployees] = useState(false);
   const [saving, setSaving] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -124,6 +137,7 @@ const EmployeesModule: React.FC = () => {
         const list = await employeeService.getAllEmployees();
         setEmployees(list);
         setSelectedEmployee(list[0] ?? null);
+        await hydrateEmployees(list);
       } catch (err) {
         console.error('Failed to load employees', err);
         setError('Unable to load employees from Firestore. Check credentials or rules.');
@@ -141,7 +155,7 @@ const EmployeesModule: React.FC = () => {
       const lastName = emp.basicDetails?.lastName || emp.lastName || '';
       const email = emp.basicDetails?.workEmail || emp.email || '';
       const department = emp.basicDetails?.department || emp.department || '';
-      const status = emp.employmentStatus || 'active';
+      const status = emp.employmentStatus || 'pending';
       const matchesSearch =
         firstName.toLowerCase().includes(term) ||
         lastName.toLowerCase().includes(term) ||
@@ -210,6 +224,11 @@ const EmployeesModule: React.FC = () => {
   };
 
   const handleSnapshotOpen = (emp: Employee) => {
+    const isIncomplete = emp.employmentStatus === 'pending' || emp.onboardingStatus === 'Incomplete Profile';
+    if (isIncomplete) {
+      openModal(emp);
+      return;
+    }
     setSelectedEmployee(emp);
     setShowSnapshot(true);
     setShowDeleteConfirm(false);
@@ -258,7 +277,12 @@ const EmployeesModule: React.FC = () => {
         paymentInformation: emp.paymentInformation || {},
         documents: emp.documents || [],
         employmentStatus: emp.employmentStatus || 'active',
-        onboardingStatus: emp.onboardingStatus || 'Active'
+        onboardingStatus: emp.onboardingStatus || 'Active',
+        userId: emp.userId,
+        companyId: emp.companyId,
+        companyName: emp.companyName,
+        companyRoleId: emp.companyRoleId,
+        companyRoleName: emp.companyRoleName
       });
       setCompletedSteps(resetCompletion);
     } else {
@@ -284,8 +308,19 @@ const EmployeesModule: React.FC = () => {
     setSaving(true);
     setError(null);
 
-    const payload = buildPayload();
     const isLastStep = activeStep >= wizardSteps.length - 1;
+    const payload = buildPayload();
+
+    // Finalize onboarding on last step
+    if (isLastStep) {
+      payload.employmentStatus = 'active';
+      payload.onboardingStatus = 'Active';
+      setFormData(prev => ({
+        ...prev,
+        employmentStatus: 'active',
+        onboardingStatus: 'Active'
+      }));
+    }
 
     try {
       // Decide whether to create (only on step 0 with no existing doc) or update
@@ -300,6 +335,7 @@ const EmployeesModule: React.FC = () => {
         setEmployees(prev => [created, ...prev]);
         setSelectedEmployee(created);
         setEditingId(created.id);
+        await syncUserFromEmployee({ ...payload, id: created.id } as Employee);
       } else if (targetId) {
         await employeeService.updateEmployee(targetId, payload);
         setEmployees(prev => prev.map(emp => (emp.id === targetId ? { ...emp, ...payload } : emp)));
@@ -307,6 +343,7 @@ const EmployeesModule: React.FC = () => {
           setSelectedEmployee(prev => (prev ? { ...prev, ...payload } : prev));
         }
         if (!editingId) setEditingId(targetId);
+        await syncUserFromEmployee({ ...payload, id: targetId } as Employee);
       }
       setCompletedSteps(prev => {
         const next = [...prev];
@@ -314,7 +351,13 @@ const EmployeesModule: React.FC = () => {
         return next;
       });
       if (isLastStep) {
-        closeModal();
+        setShowSnapshot(true);
+        setIsModalOpen(false);
+        setActiveStep(0);
+        setEditingId(targetId || editingId || null);
+        if (payload.employmentStatus === 'active' && selectedEmployee) {
+          setSelectedEmployee(prev => (prev ? { ...prev, ...payload, id: targetId || prev.id } : prev));
+        }
       } else {
         setActiveStep(prev => Math.min(prev + 1, wizardSteps.length - 1));
       }
@@ -376,9 +419,95 @@ const EmployeesModule: React.FC = () => {
 
   const totalAnnual = useMemo(() => totalMonthly * 12, [totalMonthly]);
 
+  const hydrateEmployees = async (existingEmployees: Employee[]) => {
+    setHydratingEmployees(true);
+    try {
+      const users = await userService.getAllUsers();
+      const employeeUsers = users.filter((u: User) => (u.companyRoleSystemRole || u.role) === Role.EMPLOYEE);
+      const byUserId = new Map(existingEmployees.map(emp => [emp.userId, emp]));
+      const creations: Promise<Employee | null>[] = [];
+
+      employeeUsers.forEach(user => {
+        const hasRecord = user.employeeRecordId || byUserId.has(user.id);
+        if (hasRecord) return;
+        const employeeId = generateEmployeeId();
+        const payload = {
+          userId: user.id,
+          companyId: user.companyId,
+          companyName: user.companyName,
+          companyRoleId: user.companyRoleId,
+          companyRoleName: user.companyRoleName,
+          employeeId,
+          firstName: user.firstName,
+          lastName: user.lastName,
+          email: user.email,
+          department: user.department,
+          designation: user.designation,
+          employmentStatus: 'pending' as const,
+          onboardingStatus: 'Incomplete Profile',
+          basicDetails: {
+            employeeId,
+            firstName: user.firstName,
+            lastName: user.lastName,
+            workEmail: user.email,
+            department: user.department,
+            designation: user.designation,
+            employmentType: 'Permanent',
+            dateOfJoining: ''
+          }
+        };
+        creations.push(
+          employeeService.addEmployee(payload).then(async created => {
+            await userService.updateUser(user.id, { employeeRecordId: created.id });
+            return created;
+          }).catch(err => {
+            console.error('Failed to auto-create employee from user', user.id, err);
+            return null;
+          })
+        );
+      });
+
+      const created = (await Promise.all(creations)).filter(Boolean) as Employee[];
+      if (created.length) {
+        setEmployees(prev => [...created, ...prev]);
+        if (!selectedEmployee && created[0]) {
+          setSelectedEmployee(created[0]);
+        }
+      }
+    } catch (err) {
+      console.error('Failed to hydrate employees from users', err);
+    } finally {
+      setHydratingEmployees(false);
+    }
+  };
+
+  const syncUserFromEmployee = async (emp: Employee) => {
+    if (!emp.userId) return;
+    try {
+      await userService.updateUser(emp.userId, {
+        firstName: emp.firstName || emp.basicDetails?.firstName || '',
+        lastName: emp.lastName || emp.basicDetails?.lastName || '',
+        department: emp.department || emp.basicDetails?.department || '',
+        designation: emp.designation || emp.basicDetails?.designation || '',
+        status: emp.employmentStatus === 'inactive' ? 'inactive' : 'active',
+        companyId: emp.companyId,
+        companyName: emp.companyName,
+        companyRoleId: emp.companyRoleId,
+        companyRoleName: emp.companyRoleName
+      });
+    } catch (err) {
+      console.error('Failed to sync user profile from employee update', err);
+    }
+  };
+
   const buildPayload = (): Omit<Employee, 'id' | 'createdAt' | 'updatedAt'> => {
     const { basicDetails, salaryDetails, personalDetails, paymentInformation, documents, employmentStatus, onboardingStatus } = formData;
     return {
+      userId: formData.userId,
+      companyId: formData.companyId,
+      companyName: formData.companyName,
+      companyRoleId: formData.companyRoleId,
+      companyRoleName: formData.companyRoleName,
       employeeId: basicDetails.employeeId,
       firstName: basicDetails.firstName,
       lastName: basicDetails.lastName,
@@ -431,6 +560,7 @@ const EmployeesModule: React.FC = () => {
 
   const activeCount = employees.filter(e => e.employmentStatus === 'active').length;
   const inactiveCount = employees.filter(e => e.employmentStatus === 'inactive').length;
+  const pendingCount = employees.filter(e => e.employmentStatus === 'pending').length;
 
   return (
     <div className="p-4 lg:p-8 space-y-6">
@@ -467,6 +597,13 @@ const EmployeesModule: React.FC = () => {
           </div>
           <p className="text-xs text-slate-500 mt-2">Exited / offboarded employees</p>
         </div>
+        <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+          <div className="flex items-center justify-between text-sm text-slate-500">
+            <span className="font-semibold text-slate-700 flex items-center gap-2"><BadgeCheck size={16} className="text-blue-500" /> Onboarding</span>
+            <span className="rounded-full bg-blue-50 px-3 py-1 text-blue-700 font-semibold">{pendingCount}</span>
+          </div>
+          <p className="text-xs text-slate-500 mt-2">Incomplete profiles awaiting completion</p>
+        </div>
       </div>
 
       <div className="rounded-2xl border border-slate-200 bg-white shadow-sm">
@@ -479,7 +616,7 @@ const EmployeesModule: React.FC = () => {
             </div>
           </div>
           <div className="flex flex-wrap gap-2">
-            {['all', 'active', 'inactive'].map(val => (
+            {['all', 'active', 'pending', 'inactive'].map(val => (
               <button
                 key={val}
                 onClick={() => setStatusFilter(val as 'all' | EmployeeStatus)}
@@ -489,7 +626,7 @@ const EmployeesModule: React.FC = () => {
                     : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'
                 }`}
               >
-                {val === 'all' ? 'All' : val === 'active' ? 'Active' : 'Inactive'}
+                {val === 'all' ? 'All' : val === 'active' ? 'Active' : val === 'pending' ? 'Onboarding' : 'Inactive'}
               </button>
             ))}
           </div>
@@ -545,8 +682,8 @@ const EmployeesModule: React.FC = () => {
                       <div className="text-xs text-slate-500">{emp.basicDetails?.designation || emp.designation || '—'}</div>
                     </td>
                     <td className="px-4 py-4">
-                      <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold ${statusBadge(emp.employmentStatus || 'active')}`}>
-                        {(emp.employmentStatus || 'active') === 'active' ? 'Active' : 'Inactive'}
+                      <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold ${statusBadge(emp.employmentStatus || 'pending')}`}>
+                        {emp.employmentStatus === 'active' ? 'Active' : emp.employmentStatus === 'inactive' ? 'Inactive' : 'Onboarding'}
                       </span>
                     </td>
                     <td className="px-4 py-4 text-slate-700">{emp.managerName || '-'}</td>

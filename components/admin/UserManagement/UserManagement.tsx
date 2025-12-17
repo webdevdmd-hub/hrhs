@@ -1,11 +1,13 @@
 
 import React, { useState, useEffect, ChangeEvent, FormEvent, useRef } from 'react';
 import { MOCK_USERS } from '../../../shared/services/mockData';
-import { Role, User } from '../../../shared/types';
+import { Company, CompanyRole, Role, User } from '../../../shared/types';
 import Button from '../../shared/ui/Button';
 import { userService } from '../../../shared/services/userService';
+import { companyService } from '../../../shared/services/companyService';
+import { employeeService } from '../../../shared/services/employeeService';
 import { authService } from '../../../shared/services/authService';
-import { Search, Filter, Edit2, Trash2, Mail, MoreVertical, Shield, User as UserIcon, Loader2, AlertCircle, Download, Upload, RefreshCcw } from 'lucide-react';
+import { Search, Filter, Edit2, Mail, Shield, Loader2, AlertCircle, Download, Upload, RefreshCcw } from 'lucide-react';
 
 interface UserFormData {
   firstName: string;
@@ -14,10 +16,35 @@ interface UserFormData {
   password: string;
   department: string;
   designation: string;
+  companyId: string;
+  companyRoleId: string;
   role: Role;
 }
 
 const UserManagement: React.FC = () => {
+  const formatRoleLabel = (role?: Role | string) => {
+    switch (role) {
+      case Role.CEO:
+        return 'CEO';
+      case Role.ADMIN:
+        return 'Admin';
+      case Role.MANAGER:
+        return 'Manager';
+      case Role.HR:
+        return 'HR';
+      case Role.EMPLOYEE:
+      case Role.USER:
+        return 'Employee';
+      default:
+        return role || 'Unknown';
+    }
+  };
+
+  const generateEmployeeId = () => {
+    const random = Math.floor(100 + Math.random() * 900);
+    return `EMP-${Date.now().toString().slice(-6)}-${random}`;
+  };
+
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -29,6 +56,9 @@ const UserManagement: React.FC = () => {
   const [importError, setImportError] = useState<string | null>(null);
   const [importSuccess, setImportSuccess] = useState<string | null>(null);
   const [actionNotice, setActionNotice] = useState<string | null>(null);
+  const [companies, setCompanies] = useState<Company[]>([]);
+  const [companiesLoading, setCompaniesLoading] = useState(true);
+  const [companyError, setCompanyError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [editingUserId, setEditingUserId] = useState<string | null>(null);
   const [resettingUserId, setResettingUserId] = useState<string | null>(null);
@@ -39,13 +69,16 @@ const UserManagement: React.FC = () => {
     password: '',
     department: '',
     designation: '',
-    role: Role.USER
+    companyId: '',
+    companyRoleId: '',
+    role: Role.EMPLOYEE
   };
   const [formData, setFormData] = useState<UserFormData>(emptyForm);
 
   // Fetch users from Firebase on mount
   useEffect(() => {
     fetchUsers();
+    fetchCompanies();
   }, []);
 
   const handleInputChange = (e: ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
@@ -54,6 +87,25 @@ const UserManagement: React.FC = () => {
       ...prev, 
       [name]: name === 'role' ? value as Role : value 
     } as UserFormData));
+  };
+
+  const handleCompanyChange = (companyId: string) => {
+    setFormData(prev => ({
+      ...prev,
+      companyId,
+      companyRoleId: '',
+      role: Role.EMPLOYEE
+    }));
+  };
+
+  const handleCompanyRoleChange = (roleId: string) => {
+    const company = companies.find(c => c.id === formData.companyId);
+    const selectedRole = company?.roles?.find(r => r.id === roleId);
+    setFormData(prev => ({
+      ...prev,
+      companyRoleId: roleId,
+      role: selectedRole?.systemRole || Role.EMPLOYEE
+    }));
   };
 
   const resetForm = () => setFormData({ ...emptyForm });
@@ -90,8 +142,23 @@ const UserManagement: React.FC = () => {
     }
   };
 
+  const fetchCompanies = async () => {
+    try {
+      setCompaniesLoading(true);
+      const data = await companyService.getAll();
+      setCompanies(data);
+      setCompanyError(null);
+    } catch (err) {
+      console.error("Failed to fetch companies", err);
+      setCompanyError("Unable to load companies. Company selection is required for new users.");
+      setCompanies([]);
+    } finally {
+      setCompaniesLoading(false);
+    }
+  };
+
   const handleExportCsv = () => {
-    const headers = ['firstName','lastName','email','role','department','designation','status','archived'];
+    const headers = ['firstName','lastName','email','companyName','companyRoleName','role','department','designation','status','archived'];
     const rows = users.map(u => headers.map(h => {
       const v = (u as any)[h];
       return typeof v === 'string' ? `"${v.replace(/"/g, '""')}"` : v ?? '';
@@ -109,6 +176,10 @@ const UserManagement: React.FC = () => {
   const handleImportCsv = async (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    if (!companies.length) {
+      setImportError("Add at least one company before importing users.");
+      return;
+    }
     clearNotices();
     setImporting(true);
     try {
@@ -116,9 +187,11 @@ const UserManagement: React.FC = () => {
       const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
       if (lines.length < 2) throw new Error('File has no data rows.');
       const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
-      const required = ['firstname','lastname','email','role','department','designation'];
+      const required = ['firstname','lastname','email','department','designation','company','companyrole'];
       const missing = required.filter(r => !headers.includes(r));
       if (missing.length) throw new Error(`Missing columns: ${missing.join(', ')}`);
+
+      const companyByName = new Map(companies.map(c => [c.name.toLowerCase(), c]));
 
       let success = 0;
       let skipped = 0;
@@ -130,7 +203,12 @@ const UserManagement: React.FC = () => {
         const email = (record['email'] || '').toLowerCase();
         if (!email) { skipped++; continue; }
         const password = record['password'] || 'Temp123!';
-        const role = Object.values(Role).includes(record['role'] as Role) ? record['role'] as Role : Role.USER;
+        const companyNameCell = (record['company'] || '').toLowerCase();
+        const roleNameCell = (record['companyrole'] || '').toLowerCase();
+        const company = companyByName.get(companyNameCell) || companies[0];
+        const companyRole = company.roles?.find(r => r.name.toLowerCase() === roleNameCell) || company.roles?.[0];
+        if (!company || !companyRole) { skipped++; continue; }
+        const systemRole = companyRole.systemRole || Role.EMPLOYEE;
         const status = record['status'] === 'inactive' ? 'inactive' : 'active';
         try {
           const { user: authUser } = await authService.createAuthUser(email, password);
@@ -138,14 +216,48 @@ const UserManagement: React.FC = () => {
             firstName: record['firstname'] || 'First',
             lastName: record['lastname'] || 'Last',
             email,
-            role,
+            role: systemRole,
             department: record['department'] || '',
             designation: record['designation'] || '',
+            companyId: company.id,
+            companyName: company.name,
+            companyRoleId: companyRole.id,
+            companyRoleName: companyRole.name,
+            companyRoleSystemRole: companyRole.systemRole,
             status,
             checkInStatus: 'out',
             archived: status === 'inactive' || record['archived'] === 'true'
           };
           await userService.addUserWithId(authUser.uid, newUser);
+          if (systemRole === Role.EMPLOYEE) {
+            const employeeId = generateEmployeeId();
+            const created = await employeeService.addEmployee({
+              userId: authUser.uid,
+              companyId: company.id,
+              companyName: company.name,
+              companyRoleId: companyRole.id,
+              companyRoleName: companyRole.name,
+              employeeId,
+              firstName: newUser.firstName,
+              lastName: newUser.lastName,
+              email: newUser.email,
+              department: newUser.department,
+              designation: newUser.designation,
+              employmentStatus: 'pending',
+              onboardingStatus: 'Incomplete Profile',
+              basicDetails: {
+                employeeId,
+                firstName: newUser.firstName,
+                lastName: newUser.lastName,
+                workEmail: newUser.email,
+                department: newUser.department,
+                designation: newUser.designation,
+                employmentType: 'Permanent',
+                dateOfJoining: ''
+              }
+            });
+            await userService.updateUser(authUser.uid, { employeeRecordId: created.id });
+          }
           success++;
         } catch (err) {
           console.error(`Row ${i + 1} import failed`, err);
@@ -185,11 +297,15 @@ const UserManagement: React.FC = () => {
     const trimmedEmail = formData.email.trim().toLowerCase();
     const trimmedDept = formData.department.trim();
     const trimmedDesignation = formData.designation.trim();
+    const selectedCompany = companies.find(c => c.id === formData.companyId);
+    const selectedCompanyRole = selectedCompany?.roles?.find((r: CompanyRole) => r.id === formData.companyRoleId);
+    const systemRole = selectedCompanyRole?.systemRole || Role.EMPLOYEE;
 
     const missingCore = !trimmedFirst || !trimmedLast || !trimmedEmail || !trimmedDept || !trimmedDesignation;
+    const missingCompany = !formData.companyId || !formData.companyRoleId || !selectedCompany || !selectedCompanyRole;
     const missingPassword = !editingUserId && !formData.password;
-    if (missingCore || missingPassword) {
-      setFormError("Please fill in all required fields.");
+    if (missingCore || missingPassword || missingCompany) {
+      setFormError("Please fill in all required fields, including company and company role.");
       return;
     }
 
@@ -199,16 +315,58 @@ const UserManagement: React.FC = () => {
       firstName: trimmedFirst,
       lastName: trimmedLast,
       email: trimmedEmail,
-      role: formData.role,
+      role: systemRole,
       designation: trimmedDesignation,
       department: trimmedDept,
+      companyId: selectedCompany?.id,
+      companyName: selectedCompany?.name,
+      companyRoleId: selectedCompanyRole?.id,
+      companyRoleName: selectedCompanyRole?.name,
+      companyRoleSystemRole: selectedCompanyRole?.systemRole,
       status: 'active',
       checkInStatus: 'out'
     };
 
+    const createEmployeeForUser = async (userId: string) => {
+      if (systemRole !== Role.EMPLOYEE) return null;
+      const employeeId = generateEmployeeId();
+      const employeePayload = {
+        userId,
+        companyId: selectedCompany?.id,
+        companyName: selectedCompany?.name,
+        companyRoleId: selectedCompanyRole?.id,
+        companyRoleName: selectedCompanyRole?.name,
+        employeeId,
+        firstName: trimmedFirst,
+        lastName: trimmedLast,
+        email: trimmedEmail,
+        department: trimmedDept,
+        designation: trimmedDesignation,
+        employmentStatus: 'pending' as const,
+        onboardingStatus: 'Incomplete Profile',
+        basicDetails: {
+          employeeId,
+          firstName: trimmedFirst,
+          lastName: trimmedLast,
+          workEmail: trimmedEmail,
+          department: trimmedDept,
+          designation: trimmedDesignation,
+          employmentType: 'Permanent',
+          dateOfJoining: ''
+        }
+      };
+      const created = await employeeService.addEmployee(employeePayload);
+      await userService.updateUser(userId, { employeeRecordId: created.id });
+      return created;
+    };
+
     try {
       if (editingUserId) {
+        const existing = users.find(u => u.id === editingUserId);
         await userService.updateUser(editingUserId, { ...newUser, archived: false });
+        if (systemRole === Role.EMPLOYEE && !(existing?.employeeRecordId)) {
+          await createEmployeeForUser(editingUserId);
+        }
         await fetchUsers();
         setActionNotice(`Updated ${newUser.firstName} ${newUser.lastName}.`);
         setEditingUserId(null);
@@ -217,6 +375,7 @@ const UserManagement: React.FC = () => {
       } else {
         const { user: authUser } = await authService.createAuthUser(trimmedEmail, formData.password);
         await userService.addUserWithId(authUser.uid, newUser);
+        await createEmployeeForUser(authUser.uid);
         await fetchUsers(); // Refresh list from DB
         resetForm();
         setShowAddForm(false);
@@ -239,11 +398,22 @@ const UserManagement: React.FC = () => {
     }
   };
 
-  const filteredUsers = users.filter(user => 
-    user.firstName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    user.lastName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    user.email.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const searchValue = searchTerm.toLowerCase();
+  const filteredUsers = users.filter(user => {
+    const companyName = (user.companyName || '').toLowerCase();
+    const companyRoleName = (user.companyRoleName || '').toLowerCase();
+    return (
+      user.firstName.toLowerCase().includes(searchValue) ||
+      user.lastName.toLowerCase().includes(searchValue) ||
+      user.email.toLowerCase().includes(searchValue) ||
+      companyName.includes(searchValue) ||
+      companyRoleName.includes(searchValue)
+    );
+  });
+
+  const selectedCompany = companies.find(c => c.id === formData.companyId);
+  const availableCompanyRoles = selectedCompany?.roles || [];
+  const selectedCompanyRole = availableCompanyRoles.find(r => r.id === formData.companyRoleId);
 
   const startEditUser = (user: User) => {
     clearNotices();
@@ -252,9 +422,11 @@ const UserManagement: React.FC = () => {
       lastName: user.lastName,
       email: user.email,
       password: '',
-      department: user.department,
-      designation: user.designation,
-      role: user.role
+      department: user.department || '',
+      designation: user.designation || '',
+      companyId: user.companyId || '',
+      companyRoleId: user.companyRoleId || '',
+      role: user.companyRoleSystemRole || user.role || Role.EMPLOYEE
     });
     setEditingUserId(user.id);
     setShowAddForm(true);
@@ -389,8 +561,42 @@ const UserManagement: React.FC = () => {
                   onChange={handleInputChange}
                   className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm font-medium text-gray-900 placeholder-gray-400 focus:border-blue-500 focus:outline-none focus:ring-4 focus:ring-blue-500/10"
                   placeholder="••••••••"
-                  required
+                  required={!editingUserId}
                 />
+              </div>
+              <div className="space-y-2">
+                <label className="block text-sm font-medium text-gray-700">Company *</label>
+                <select
+                  name="companyId"
+                  value={formData.companyId}
+                  onChange={(e) => handleCompanyChange(e.target.value)}
+                  className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm font-medium text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-4 focus:ring-blue-500/10"
+                  disabled={companiesLoading || !companies.length}
+                >
+                  <option value="">{companiesLoading ? 'Loading companies...' : 'Select company'}</option>
+                  {companies.map(company => (
+                    <option key={company.id} value={company.id}>{company.name}</option>
+                  ))}
+                </select>
+                {companyError && <p className="text-xs text-orange-600">{companyError}</p>}
+              </div>
+              <div className="space-y-2">
+                <label className="block text-sm font-medium text-gray-700">Company Role *</label>
+                <select
+                  name="companyRoleId"
+                  value={formData.companyRoleId}
+                  onChange={(e) => handleCompanyRoleChange(e.target.value)}
+                  className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm font-medium text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-4 focus:ring-blue-500/10"
+                  disabled={!formData.companyId || availableCompanyRoles.length === 0}
+                >
+                  <option value="">{formData.companyId ? 'Select company role' : 'Choose company first'}</option>
+                  {availableCompanyRoles.map(role => (
+                    <option key={role.id} value={role.id}>{role.name}</option>
+                  ))}
+                </select>
+                <p className="text-xs text-gray-500">
+                  System access: {formatRoleLabel(selectedCompanyRole?.systemRole) || 'Employee'}
+                </p>
               </div>
               <div className="space-y-2">
                 <label className="block text-sm font-medium text-gray-700">Department</label>
@@ -413,19 +619,6 @@ const UserManagement: React.FC = () => {
                   placeholder="Associate"
                   required
                 />
-              </div>
-              <div className="space-y-2">
-                <label className="block text-sm font-medium text-gray-700">Role</label>
-                <select
-                  name="role"
-                  value={formData.role}
-                  onChange={handleInputChange}
-                  className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm font-medium text-gray-900 placeholder-gray-400 focus:border-blue-500 focus:outline-none focus:ring-4 focus:ring-blue-500/10"
-                >
-                  <option value={Role.USER}>User</option>
-                  <option value={Role.MANAGER}>Manager</option>
-                  <option value={Role.ADMIN}>Admin</option>
-                </select>
               </div>
             </div>
             <div className="flex gap-3">
@@ -479,7 +672,16 @@ const UserManagement: React.FC = () => {
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:hidden">
             {filteredUsers.length === 0 ? (
               <div className="col-span-full py-10 text-center text-gray-500">No users found.</div>
-            ) : filteredUsers.map((user) => (
+            ) : filteredUsers.map((user) => {
+              const effectiveRole = user.companyRoleSystemRole || user.role;
+              const roleLabel = formatRoleLabel(effectiveRole);
+              const roleClass = effectiveRole === Role.ADMIN || effectiveRole === Role.CEO
+                ? 'bg-purple-50 text-purple-700 border border-purple-100'
+                : effectiveRole === Role.MANAGER
+                ? 'bg-orange-50 text-orange-700 border border-orange-100'
+                : 'bg-blue-50 text-blue-700 border border-blue-100';
+
+              return (
               <div key={user.id} className="group relative bg-white rounded-2xl p-5 shadow-sm ring-1 ring-gray-200/50 hover:shadow-md transition-shadow">
                 <div className="flex items-start justify-between">
                   <div className="flex items-center gap-4">
@@ -505,11 +707,18 @@ const UserManagement: React.FC = () => {
                 </div>
                 
                 <div className="mt-5 flex flex-wrap gap-2">
-                  <span className={`inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-xs font-semibold 
-                    ${user.role === Role.ADMIN ? 'bg-purple-50 text-purple-700 border border-purple-100' : 
-                      user.role === Role.MANAGER ? 'bg-orange-50 text-orange-700 border border-orange-100' : 
-                      'bg-blue-50 text-blue-700 border border-blue-100'}`}>
-                    <Shield size={12} /> {user.role}
+                  {user.companyName && (
+                    <span className="inline-flex items-center rounded-lg bg-gray-50 px-2.5 py-1 text-xs font-semibold text-gray-700 border border-gray-200">
+                      {user.companyName}
+                    </span>
+                  )}
+                  {user.companyRoleName && (
+                    <span className="inline-flex items-center gap-1 rounded-lg bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-700 border border-blue-100">
+                      <Shield size={12} /> {user.companyRoleName}
+                    </span>
+                  )}
+                  <span className={`inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-xs font-semibold ${roleClass}`}>
+                    <Shield size={12} /> {roleLabel}
                   </span>
                   <span className="inline-flex items-center rounded-lg bg-gray-50 px-2.5 py-1 text-xs font-medium text-gray-600 border border-gray-100">
                     {user.department}
@@ -535,7 +744,7 @@ const UserManagement: React.FC = () => {
                   </Button>
                 </div>
               </div>
-            ))}
+            )})}
           </div>
 
           {/* Desktop View: Table (Visible lg+) */}
@@ -544,6 +753,7 @@ const UserManagement: React.FC = () => {
               <thead className="bg-gray-50/50 text-xs uppercase text-gray-500 font-bold tracking-wider">
                 <tr>
                   <th className="px-6 py-5">Employee</th>
+                  <th className="px-6 py-5">Company</th>
                   <th className="px-6 py-5">Role & Dept</th>
                   <th className="px-6 py-5">Status</th>
                   <th className="px-6 py-5">Last Activity</th>
@@ -553,11 +763,19 @@ const UserManagement: React.FC = () => {
               <tbody className="divide-y divide-gray-100">
                 {filteredUsers.length === 0 ? (
                   <tr>
-                    <td colSpan={5} className="px-6 py-10 text-center text-gray-500">
+                    <td colSpan={6} className="px-6 py-10 text-center text-gray-500">
                       No users found. Try adding a new team member.
                     </td>
                   </tr>
-                ) : filteredUsers.map((user) => (
+                ) : filteredUsers.map((user) => {
+                  const effectiveRole = user.companyRoleSystemRole || user.role;
+                  const roleLabel = formatRoleLabel(effectiveRole);
+                  const roleClass = effectiveRole === Role.ADMIN || effectiveRole === Role.CEO
+                    ? 'bg-purple-100 text-purple-700'
+                    : effectiveRole === Role.MANAGER
+                    ? 'bg-orange-100 text-orange-700'
+                    : 'bg-blue-100 text-blue-700';
+                  return (
                   <tr key={user.id} className="group hover:bg-gray-50/50 transition-colors">
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="flex items-center gap-4">
@@ -578,12 +796,19 @@ const UserManagement: React.FC = () => {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="flex flex-col gap-1">
+                        <span className="text-sm font-semibold text-gray-900">{user.companyName || '—'}</span>
+                        {user.companyRoleName && (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-semibold text-blue-700 border border-blue-100">
+                            <Shield size={12} /> {user.companyRoleName}
+                          </span>
+                        )}
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="flex flex-col gap-1">
                         <div className="flex items-center gap-2">
-                          <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide
-                            ${user.role === Role.ADMIN ? 'bg-purple-100 text-purple-700' : 
-                              user.role === Role.MANAGER ? 'bg-orange-100 text-orange-700' : 
-                              'bg-blue-100 text-blue-700'}`}>
-                            {user.role}
+                          <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${roleClass}`}>
+                            {roleLabel}
                           </span>
                         </div>
                         <span className="text-xs text-gray-500">{user.department}</span>
@@ -619,7 +844,7 @@ const UserManagement: React.FC = () => {
                       </div>
                     </td>
                   </tr>
-                ))}
+                )})}
               </tbody>
             </table>
             <div className="border-t border-gray-200 bg-gray-50/50 px-6 py-4 flex items-center justify-between">
