@@ -306,6 +306,14 @@ export interface AttendanceRecord {
   createdAt?: Date;
 }
 
+export interface CrosschexLog {
+  userId: string;
+  deviceId?: string;
+  direction?: 'in' | 'out';
+  timestamp: string; // ISO timestamp
+  raw?: any;
+}
+
 export interface JobApplication {
   id: string;
   name: string;

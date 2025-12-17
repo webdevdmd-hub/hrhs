@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Calendar, Clock, Download, Filter, Search, CheckCircle2, XCircle, ArrowRightLeft, Loader2 } from 'lucide-react';
+import { Calendar, Clock, Download, Filter, Search, CheckCircle2, XCircle, ArrowRightLeft, Loader2, AlertTriangle, AlarmClock, Building2, UserCircle } from 'lucide-react';
 import { AttendanceRecord, Employee } from '../../../shared/types';
 import { attendanceService } from '../../../shared/services/attendanceService';
 import { employeeService } from '../../../shared/services/employeeService';
@@ -106,51 +106,74 @@ const AttendanceModule: React.FC = () => {
   };
 
   const filtered = useMemo(() => {
+    const searchValue = search.toLowerCase();
+    const nameMap = new Map(employees.map(emp => [emp.id, `${emp.basicDetails?.firstName || emp.firstName || ''} ${emp.basicDetails?.lastName || emp.lastName || ''}`.trim().toLowerCase()]));
     return records.filter(rec => {
       const inRange = rec.date >= fromDate && rec.date <= toDate;
-      const matches = rec.userId.toLowerCase().includes(search.toLowerCase());
+      const name = nameMap.get(rec.userId) || '';
+      const matches = rec.userId.toLowerCase().includes(searchValue) || name.includes(searchValue);
       return inRange && matches;
     });
-  }, [records, fromDate, toDate, search]);
+  }, [records, fromDate, toDate, search, employees]);
 
   const summary = useMemo(() => {
     const totalPresent = filtered.filter(r => r.status === 'present').length;
     const totalAbsent = filtered.filter(r => r.status === 'absent').length;
     const totalHalf = filtered.filter(r => r.status === 'half-day').length;
     const totalHours = filtered.reduce((sum, r) => sum + computeHours(r), 0);
-    return { totalPresent, totalAbsent, totalHalf, totalHours };
+    const totalLate = filtered.filter(r => r.isLate).length;
+    const totalEarly = filtered.filter(r => r.isEarlyDeparture).length;
+    return { totalPresent, totalAbsent, totalHalf, totalHours, totalLate, totalEarly };
   }, [filtered]);
+
+  const employeeLabel = (id: string) => {
+    const emp = employees.find(e => e.id === id);
+    if (!emp) return id;
+    const name = `${emp.basicDetails?.firstName || emp.firstName || ''} ${emp.basicDetails?.lastName || emp.lastName || ''}`.trim();
+    return name || id;
+  };
 
   return (
     <div className="p-4 lg:p-8 space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900">Attendance</h1>
-          <p className="text-sm text-slate-500 mt-1">Check-in/out, filters, and quick summaries.</p>
+      <div className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-6 shadow-sm">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <p className="text-xs uppercase tracking-[0.2em] text-blue-600 font-semibold">Attendance</p>
+            <h1 className="text-2xl font-bold text-slate-900">Realtime presence & device sync</h1>
+            <p className="text-sm text-slate-500 mt-1">Review logs, mark absences, and export records.</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <button className="inline-flex items-center gap-2 rounded-lg bg-white border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">
+              <Download size={16} /> Export CSV
+            </button>
+          </div>
         </div>
-        <div className="flex items-center gap-2">
-          <button className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700">
-            <Download size={16} /> Export CSV
-          </button>
-        </div>
-      </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-        <div className="rounded-xl border border-slate-200 bg-white p-4">
-          <div className="text-xs uppercase text-slate-500 font-semibold">Present</div>
-          <div className="text-2xl font-bold text-slate-900 mt-2 flex items-center gap-2"><CheckCircle2 size={18} className="text-emerald-500" /> {summary.totalPresent}</div>
-        </div>
-        <div className="rounded-xl border border-slate-200 bg-white p-4">
-          <div className="text-xs uppercase text-slate-500 font-semibold">Absent</div>
-          <div className="text-2xl font-bold text-slate-900 mt-2 flex items-center gap-2"><XCircle size={18} className="text-red-500" /> {summary.totalAbsent}</div>
-        </div>
-        <div className="rounded-xl border border-slate-200 bg-white p-4">
-          <div className="text-xs uppercase text-slate-500 font-semibold">Half Day</div>
-          <div className="text-2xl font-bold text-slate-900 mt-2">{summary.totalHalf}</div>
-        </div>
-        <div className="rounded-xl border border-slate-200 bg-white p-4">
-          <div className="text-xs uppercase text-slate-500 font-semibold">Total Hours</div>
-          <div className="text-2xl font-bold text-slate-900 mt-2">{summary.totalHours.toFixed(1)}h</div>
+        <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3">
+          <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-4">
+            <div className="text-xs uppercase text-slate-500 font-semibold">Present</div>
+            <div className="text-2xl font-bold text-slate-900 mt-2 flex items-center gap-2"><CheckCircle2 size={18} className="text-emerald-500" /> {summary.totalPresent}</div>
+          </div>
+          <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-4">
+            <div className="text-xs uppercase text-slate-500 font-semibold">Absent</div>
+            <div className="text-2xl font-bold text-slate-900 mt-2 flex items-center gap-2"><XCircle size={18} className="text-red-500" /> {summary.totalAbsent}</div>
+          </div>
+          <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-4">
+            <div className="text-xs uppercase text-slate-500 font-semibold">Half Day</div>
+            <div className="text-2xl font-bold text-slate-900 mt-2">{summary.totalHalf}</div>
+          </div>
+          <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-4">
+            <div className="text-xs uppercase text-slate-500 font-semibold">Late Arrivals</div>
+            <div className="text-2xl font-bold text-slate-900 mt-2 flex items-center gap-2"><AlarmClock size={18} className="text-amber-500" /> {summary.totalLate}</div>
+          </div>
+          <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-4">
+            <div className="text-xs uppercase text-slate-500 font-semibold">Early Leaves</div>
+            <div className="text-2xl font-bold text-slate-900 mt-2 flex items-center gap-2"><AlertTriangle size={18} className="text-orange-500" /> {summary.totalEarly}</div>
+          </div>
+          <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-4">
+            <div className="text-xs uppercase text-slate-500 font-semibold">Total Hours</div>
+            <div className="text-2xl font-bold text-slate-900 mt-2">{summary.totalHours.toFixed(1)}h</div>
+          </div>
         </div>
       </div>
 
@@ -160,7 +183,7 @@ const AttendanceModule: React.FC = () => {
             <Calendar size={18} className="text-blue-600" />
             <div>
               <h3 className="font-semibold text-slate-800">Daily Records</h3>
-              <p className="text-xs text-slate-500">Date range and quick search by Employee ID.</p>
+              <p className="text-xs text-slate-500">Date range and quick search by employee.</p>
             </div>
           </div>
           <div className="flex flex-wrap gap-2 items-center">
@@ -174,7 +197,7 @@ const AttendanceModule: React.FC = () => {
               <input
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search by employee ID..."
+                placeholder="Search by name or ID..."
                 className="pl-9 pr-3 py-2 rounded-lg border border-slate-200 text-sm focus:border-blue-500 focus:outline-none"
               />
             </div>
@@ -205,7 +228,7 @@ const AttendanceModule: React.FC = () => {
           <table className="min-w-full text-sm">
             <thead className="bg-slate-50 text-slate-500 text-xs uppercase">
               <tr>
-                <th className="px-4 py-3 text-left font-semibold">Employee ID</th>
+                <th className="px-4 py-3 text-left font-semibold">Employee</th>
                 <th className="px-4 py-3 text-left font-semibold">Date</th>
                 <th className="px-4 py-3 text-left font-semibold">Check-in</th>
                 <th className="px-4 py-3 text-left font-semibold">Check-out</th>
@@ -221,7 +244,12 @@ const AttendanceModule: React.FC = () => {
                 ) : (
                 filtered.map(rec => (
                   <tr key={rec.id} className="hover:bg-slate-50/50">
-                    <td className="px-4 py-3 font-semibold text-slate-800">{rec.userId}</td>
+                    <td className="px-4 py-3 font-semibold text-slate-800">
+                      <div className="flex flex-col">
+                        <span>{employeeLabel(rec.userId)}</span>
+                        <span className="text-xs text-slate-500">{rec.userId}</span>
+                      </div>
+                    </td>
                     <td className="px-4 py-3 text-slate-700">{formatDate(rec.date)}</td>
                     <td className="px-4 py-3 text-slate-700">{rec.checkIn ? new Date(rec.checkIn).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '-'}</td>
                     <td className="px-4 py-3 text-slate-700">{rec.checkOut ? new Date(rec.checkOut).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '-'}</td>
@@ -245,8 +273,8 @@ const AttendanceModule: React.FC = () => {
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-3">
-          <label className="text-sm text-slate-600 flex items-center gap-2">
-            <span>Employee</span>
+          <div className="flex items-center gap-2">
+            <UserCircle size={18} className="text-slate-500" />
             <select
               value={selectedEmployee?.id || ''}
               onChange={(e) => {
@@ -259,7 +287,7 @@ const AttendanceModule: React.FC = () => {
                 <option key={emp.id} value={emp.id}>{emp.basicDetails?.firstName || emp.firstName} {emp.basicDetails?.lastName || emp.lastName}</option>
               ))}
             </select>
-          </label>
+          </div>
           {loading && <Loader2 className="animate-spin text-slate-400" size={16} />}
           {error && <span className="text-sm text-red-600">{error}</span>}
         </div>
