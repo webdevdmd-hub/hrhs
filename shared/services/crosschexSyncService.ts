@@ -2,12 +2,6 @@ import { attendanceService } from "./attendanceService";
 import { crosschexService } from "./crosschexService";
 import { AttendanceRecord, CrosschexLog, Employee } from "../types";
 
-type ShiftRules = {
-  shiftStart?: string; // HH:mm
-  shiftEnd?: string;   // HH:mm
-  graceMinutes?: number;
-};
-
 const toMinutes = (time: string) => {
   const [h, m] = time.split(":").map(Number);
   return (h || 0) * 60 + (m || 0);
@@ -55,6 +49,12 @@ const resolveStatus = (checkIn?: string, checkOut?: string, rules?: ShiftRules) 
   return { status: "present" as AttendanceRecord["status"], isLate, isEarlyDeparture };
 };
 
+export type ShiftRules = {
+  shiftStart?: string; // HH:mm
+  shiftEnd?: string;   // HH:mm
+  graceMinutes?: number;
+};
+
 export const crosschexSyncService = {
   /**
    * Fetch logs from CrossChex and push into Firestore attendance.
@@ -71,8 +71,36 @@ export const crosschexSyncService = {
     employees: Employee[];
     shiftRules?: ShiftRules;
   }) {
-    const logs = await crosschexService.fetchLogs(from, to);
-    const grouped = groupLogsByUserDate(logs);
+    // Ensure we have a valid token
+    let tokenResp = await crosschexService.getToken();
+
+    // Fetch pages until complete
+    let page = 1;
+    const allLogs: CrosschexLog[] = [];
+    while (true) {
+      let pageData;
+      try {
+        pageData = await crosschexService.getRecords({
+          token: tokenResp.token,
+          begin: `${from}T00:00:00+00:00`,
+          end: `${to}T23:59:59+00:00`,
+          page,
+          perPage: 100,
+          order: "asc"
+        });
+      } catch (err: any) {
+        if (err?.message === "TOKEN_EXPIRES") {
+          tokenResp = await crosschexService.getToken();
+          continue; // retry same page with fresh token
+        }
+        throw err;
+      }
+      allLogs.push(...pageData.list);
+      if (page >= pageData.pageCount) break;
+      page++;
+    }
+
+    const grouped = groupLogsByUserDate(allLogs);
     const employeeByExternalId = new Map<string, Employee>();
     employees.forEach(emp => {
       if (emp.employeeId) employeeByExternalId.set(emp.employeeId, emp);

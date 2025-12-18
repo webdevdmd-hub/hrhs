@@ -1,8 +1,9 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Calendar, Clock, Download, Filter, Search, CheckCircle2, XCircle, ArrowRightLeft, Loader2, AlertTriangle, AlarmClock, Building2, UserCircle } from 'lucide-react';
-import { AttendanceRecord, Employee } from '../../../shared/types';
+import { Calendar, Clock, Download, Filter, Search, CheckCircle2, XCircle, ArrowRightLeft, Loader2, AlertTriangle, AlarmClock, Building2, UserCircle, ChevronLeft, ChevronRight } from 'lucide-react';
+import { AttendanceRecord, CrosschexLog, Employee } from '../../../shared/types';
 import { attendanceService } from '../../../shared/services/attendanceService';
 import { employeeService } from '../../../shared/services/employeeService';
+import { crosschexProxyService } from '../../../shared/services/crosschexProxyService';
 
 const todayISO = new Date().toISOString().slice(0, 10);
 
@@ -28,6 +29,12 @@ const AttendanceModule: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [crossLogs, setCrossLogs] = useState<CrosschexLog[]>([]);
+  const [crossLoading, setCrossLoading] = useState(false);
+  const [crossError, setCrossError] = useState<string | null>(null);
+  const [crossPage, setCrossPage] = useState(1);
+  const [crossPerPage, setCrossPerPage] = useState(25);
+  const [crossPageCount, setCrossPageCount] = useState(1);
 
   useEffect(() => {
     const load = async () => {
@@ -131,6 +138,33 @@ const AttendanceModule: React.FC = () => {
     if (!emp) return id;
     const name = `${emp.basicDetails?.firstName || emp.firstName || ''} ${emp.basicDetails?.lastName || emp.lastName || ''}`.trim();
     return name || id;
+  };
+
+  const fetchCrosschexLogs = async () => {
+    const proxyMissing = !import.meta.env.VITE_CROSSCHEX_API_BASE;
+    if (proxyMissing) {
+      setCrossError("Set VITE_CROSSCHEX_API_BASE (and optional VITE_CROSSCHEX_PROXY_KEY) to enable proxy fetch.");
+      return;
+    }
+    setCrossLoading(true);
+    setCrossError(null);
+    try {
+      const selectedWorkno = selectedEmployee?.employeeId;
+      const pageData = await crosschexProxyService.fetchAttendance({
+        start: `${fromDate}T00:00:00+00:00`,
+        end: `${toDate}T23:59:59+00:00`,
+        page: crossPage,
+        perPage: crossPerPage,
+        workno: selectedWorkno
+      });
+      setCrossLogs(pageData.list);
+      setCrossPageCount(pageData.pageCount || 1);
+    } catch (err: any) {
+      console.error("CrossChex fetch failed", err);
+      setCrossError(err?.message || "Failed to fetch CrossChex logs.");
+    } finally {
+      setCrossLoading(false);
+    }
   };
 
   return (
@@ -290,6 +324,90 @@ const AttendanceModule: React.FC = () => {
           </div>
           {loading && <Loader2 className="animate-spin text-slate-400" size={16} />}
           {error && <span className="text-sm text-red-600">{error}</span>}
+        </div>
+
+        <div className="mt-6 border-t border-slate-200 pt-4">
+          <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+            <div>
+              <h4 className="text-sm font-semibold text-slate-800">CrossChex Live Logs</h4>
+              <p className="text-xs text-slate-500">Proxy fetch with date range, employee filter, and pagination.</p>
+              {crossError && <p className="text-xs text-red-600 mt-1">{crossError}</p>}
+            </div>
+            <button
+              onClick={fetchCrosschexLogs}
+              disabled={crossLoading}
+              className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+            >
+              {crossLoading ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />} Fetch from CrossChex
+            </button>
+          </div>
+          <div className="overflow-x-auto rounded-xl border border-slate-200">
+            <table className="min-w-full text-sm">
+              <thead className="bg-slate-50 text-slate-500 text-xs uppercase">
+                <tr>
+                  <th className="px-4 py-3 text-left font-semibold">Work No</th>
+                  <th className="px-4 py-3 text-left font-semibold">Name</th>
+                  <th className="px-4 py-3 text-left font-semibold">Device</th>
+                  <th className="px-4 py-3 text-left font-semibold">Check Time</th>
+                  <th className="px-4 py-3 text-left font-semibold">Direction</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {crossLoading ? (
+                  <tr><td colSpan={5} className="px-4 py-4 text-center text-slate-500">Loading CrossChex logs...</td></tr>
+                ) : crossLogs.length === 0 ? (
+                  <tr><td colSpan={5} className="px-4 py-4 text-center text-slate-500">No CrossChex logs loaded.</td></tr>
+                ) : (
+                  crossLogs.map((log, idx) => {
+                    const employee = (log.raw && (log.raw.employee || log.raw.payload?.list?.employee)) || {};
+                    const device = (log.raw && (log.raw.device || log.raw.payload?.list?.device)) || {};
+                    const name = [employee.first_name, employee.last_name].filter(Boolean).join(" ") || "—";
+                    return (
+                      <tr key={`${log.userId}-${log.timestamp}-${idx}`} className="hover:bg-slate-50/50">
+                        <td className="px-4 py-3 font-semibold text-slate-800">{log.userId || '—'}</td>
+                        <td className="px-4 py-3 text-slate-700">{name}</td>
+                        <td className="px-4 py-3 text-slate-700">{device.name || device.serial_number || '—'}</td>
+                        <td className="px-4 py-3 text-slate-700">
+                          {log.timestamp ? new Date(log.timestamp).toLocaleString() : '—'}
+                        </td>
+                        <td className="px-4 py-3 text-slate-700 capitalize">{log.direction || '—'}</td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+          <div className="flex items-center justify-between mt-3 text-sm text-slate-600">
+            <div className="flex items-center gap-2">
+              <button
+                className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-3 py-1.5 disabled:opacity-50"
+                onClick={() => setCrossPage(p => Math.max(1, p - 1))}
+                disabled={crossPage <= 1 || crossLoading}
+              >
+                <ChevronLeft size={14} /> Prev
+              </button>
+              <span>Page {crossPage} / {crossPageCount}</span>
+              <button
+                className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-3 py-1.5 disabled:opacity-50"
+                onClick={() => setCrossPage(p => Math.min(crossPageCount, p + 1))}
+                disabled={crossPage >= crossPageCount || crossLoading}
+              >
+                Next <ChevronRight size={14} />
+              </button>
+            </div>
+            <div className="flex items-center gap-2">
+              <span>Per page</span>
+              <select
+                value={crossPerPage}
+                onChange={(e) => { setCrossPerPage(Number(e.target.value)); setCrossPage(1); }}
+                className="rounded-lg border border-slate-200 px-2 py-1 text-sm focus:border-blue-500 focus:outline-none"
+                disabled={crossLoading}
+              >
+                {[10, 25, 50, 100].map(n => <option key={n} value={n}>{n}</option>)}
+              </select>
+            </div>
+          </div>
         </div>
       </div>
   );

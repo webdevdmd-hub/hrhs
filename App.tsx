@@ -17,6 +17,7 @@ import BackgroundChecksModule from './components/recruitment/BackgroundChecksMod
 import RecruitmentAnalytics from './components/recruitment/RecruitmentAnalytics';
 import Login from './components/auth/Login';
 import CompanyManagement from './components/admin/CompanyManagement/CompanyManagement';
+import AttendanceModule from './components/base/attendance/AttendanceModule';
 import { Role, User } from './shared/types';
 import { hasAccess, Module, PermissionConfig } from './shared/permissions';
 import { userService } from './shared/services/userService';
@@ -147,6 +148,14 @@ const AppLayout: React.FC = () => {
               element={
                 <RequireAuth user={currentUser} loading={authLoading}>
                   <EmployeesModule />
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="/attendance"
+              element={
+                <RequireAuth user={currentUser} loading={authLoading}>
+                  <AttendanceModule />
                 </RequireAuth>
               }
             />

@@ -1,15 +1,3 @@
-/**
- * CrossChex Cloud API client.
- * Fetches attendance logs from biometric devices.
- *
- * API credentials are loaded from environment variables:
- * - VITE_CROSSCHEX_API_KEY
- * - VITE_CROSSCHEX_API_SECRET
- * - VITE_CROSSCHEX_BASE_URL (optional, defaults to US region)
- *
- * IMPORTANT: Do not commit secrets. Store them in .env and configure your cloud
- * function runtime with the same names (process.env.* on the server).
- */
 import { CrosschexLog } from "../types";
 
 const {
@@ -18,8 +6,7 @@ const {
   VITE_CROSSCHEX_BASE_URL
 } = import.meta.env;
 
-const BASE_URL = VITE_CROSSCHEX_BASE_URL || "https://us.crosschexcloud.com";
-const ATTENDANCE_PATH = "/openapi/attendance/list"; // Replace with the exact path your account requires
+const BASE_URL = VITE_CROSSCHEX_BASE_URL || "https://api.us.i.com";
 
 const requireCreds = () => {
   if (!VITE_CROSSCHEX_API_KEY || !VITE_CROSSCHEX_API_SECRET) {
@@ -27,41 +14,115 @@ const requireCreds = () => {
   }
 };
 
-const normalizeLog = (item: any): CrosschexLog => ({
-  userId: item.user_id || item.userId || "",
-  deviceId: item.device_id || item.deviceId,
-  direction: (item.direction || item.type || "").toLowerCase() === "out" ? "out" : "in",
-  timestamp: item.punch_time || item.checkTime || item.timestamp || item.time || "",
-  raw: item
-});
+const makeRequestId = () => crypto.randomUUID();
+const makeTimestamp = () => new Date().toISOString();
+
+const normalizeLog = (item: any): CrosschexLog => {
+  const employee = item.employee || item.payload?.list?.employee || {};
+  const device = item.device || item.payload?.list?.device || {};
+  return {
+    userId: employee.workno || employee.workNo || item.user_id || item.userId || "",
+    deviceId: device.serial_number || device.serialNumber,
+    direction: item.checktype === 128 || String(item.checktype) === "128" ? "in" : "out",
+    timestamp: item.checktime || item.checkTime || item.timestamp || item.time || "",
+    raw: item
+  };
+};
 
 export const crosschexService = {
   /**
-   * Fetch attendance logs for a date range (inclusive).
-   * @param from ISO date string YYYY-MM-DD
-   * @param to ISO date string YYYY-MM-DD
+   * Get auth token from CrossChex (authorize.token / token)
    */
-  async fetchLogs(from: string, to: string): Promise<CrosschexLog[]> {
+  async getToken(): Promise<{ token: string; expires?: string }> {
+    requireCreds();
+    const body = {
+      header: {
+        nameSpace: "authorize.token",
+        nameAction: "token",
+        version: "1.0",
+        requestId: makeRequestId(),
+        timestamp: makeTimestamp()
+      },
+      payload: {
+        api_key: VITE_CROSSCHEX_API_KEY,
+        api_secret: VITE_CROSSCHEX_API_SECRET
+      }
+    };
+
+    const res = await fetch(`${BASE_URL}/`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body)
+    });
+    const json = await res.json();
+    if (!res.ok || json?.payload?.token == null) {
+      throw new Error(`CrossChex token failed: ${json?.message || res.status}`);
+    }
+    return { token: json.payload.token, expires: json.payload.expires };
+  },
+
+  /**
+   * Fetch paged attendance records (attendance.record / getrecord)
+   */
+  async getRecords({
+    token,
+    begin,
+    end,
+    page = 1,
+    perPage = 100,
+    order = "asc"
+  }: {
+    token: string;
+    begin: string; // ISO with timezone, e.g. 2025-02-01T00:00:00+00:00
+    end: string;   // ISO with timezone
+    page?: number;
+    perPage?: number;
+    order?: "asc" | "desc";
+  }): Promise<{ list: CrosschexLog[]; page: number; pageCount: number; count?: number }> {
     requireCreds();
 
-    const url = `${BASE_URL}${ATTENDANCE_PATH}`;
-    const res = await fetch(url, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-API-KEY": VITE_CROSSCHEX_API_KEY!,
-        "X-API-SECRET": VITE_CROSSCHEX_API_SECRET!
+    const body = {
+      header: {
+        nameSpace: "attendance.record",
+        nameAction: "getrecord",
+        version: "1.0",
+        requestId: makeRequestId(),
+        timestamp: makeTimestamp()
       },
-      body: JSON.stringify({ from, to })
+      authorize: {
+        type: "token",
+        token
+      },
+      payload: {
+        begin_time: begin,
+        end_time: end,
+        order,
+        page,
+        per_page: Math.min(perPage, 100)
+      }
+    };
+
+    const res = await fetch(`${BASE_URL}/`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body)
     });
 
+    const json = await res.json();
+    if (json?.respondCode === "TOKEN_EXPIRES") {
+      throw new Error("TOKEN_EXPIRES");
+    }
     if (!res.ok) {
-      const text = await res.text();
-      throw new Error(`CrossChex fetch failed (${res.status}): ${text}`);
+      throw new Error(`CrossChex getRecords failed: ${json?.message || res.status}`);
     }
 
-    const payload = await res.json();
-    const items = Array.isArray(payload?.data) ? payload.data : Array.isArray(payload) ? payload : [];
-    return items.map(normalizeLog).filter(l => l.userId && l.timestamp);
+    const listRaw = json?.payload?.list || json?.payload?.data || [];
+    const list = Array.isArray(listRaw) ? listRaw.map(normalizeLog).filter(l => l.userId && l.timestamp) : [];
+    return {
+      list,
+      page: json?.payload?.page || page,
+      pageCount: json?.payload?.pageCount || json?.payload?.page_count || 1,
+      count: json?.payload?.count
+    };
   }
 };
