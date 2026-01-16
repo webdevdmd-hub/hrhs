@@ -6,6 +6,7 @@ import Topbar from './components/layout/Topbar';
 import FooterChat from './components/layout/FooterChat';
 import Dashboard from './components/base/Dashboard/Dashboard';
 import PayrollModule from './components/base/payroll/PayrollModule';
+import AttendanceModule from './components/base/attendance/AttendanceModule';
 import UserManagement from './components/admin/UserManagement/UserManagement';
 import EmployeesModule from './components/base/employee/EmployeesModule';
 import JobRequisitionModule from './components/recruitment/JobRequisitionModule';
@@ -150,7 +151,14 @@ const AppLayout: React.FC = () => {
                 </RequireAuth>
               }
             />
-            {/* Attendance module removed */}
+            <Route
+              path="/attendance"
+              element={
+                <RequireAuth user={currentUser} loading={authLoading}>
+                  <AttendanceModule />
+                </RequireAuth>
+              }
+            />
             <Route 
               path="/payroll"
               element={
